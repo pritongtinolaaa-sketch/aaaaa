@@ -329,7 +329,9 @@ export default function DashboardPage() {
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
-                  className={`border-2 border-dashed rounded-md p-12 text-center transition-all ${
+                  className={`border-2 border-dashed rounded-md text-center transition-all ${
+                    selectedFiles.length > 0 ? 'p-6' : 'p-12'
+                  } ${
                     dragActive
                       ? 'border-primary bg-primary/5 shadow-[0_0_30px_rgba(229,9,20,0.2)]'
                       : 'border-white/15 hover:border-white/25'
@@ -341,7 +343,7 @@ export default function DashboardPage() {
                       <p className="text-white font-medium" data-testid="selected-filename">
                         {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
                       </p>
-                      <div className="mt-2 max-h-32 overflow-y-auto space-y-1">
+                      <div className="mt-2 space-y-1">
                         {selectedFiles.map((f, i) => (
                           <div key={i} className="flex items-center justify-center gap-2 text-sm text-white/50">
                             <span className="font-mono truncate max-w-[200px]">{f.name}</span>
