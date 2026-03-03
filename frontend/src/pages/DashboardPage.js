@@ -20,10 +20,18 @@ export default function DashboardPage() {
   const [progress, setProgress] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [noticeText, setNoticeText] = useState(() => localStorage.getItem('adminNotice') || '');
+  const [isEditing, setIsEditing] = useState(false);
   const fileInputRef = useRef(null);
   const pollRef = useRef(null);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+
+  const handleSaveNotice = () => {
+    localStorage.setItem('adminNotice', noticeText);
+    setIsEditing(false);
+    toast.success('Notice saved!');
+  };
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -183,14 +191,51 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="mb-10"
+            className="mb-10 flex items-start justify-between gap-6"
           >
-            <h1 className="font-bebas text-4xl sm:text-5xl lg:text-6xl tracking-wider text-white" data-testid="dashboard-title">
-              COOKIE <span className="text-primary">CHECKER</span>
-            </h1>
-            <p className="text-white/40 mt-2 text-sm md:text-base max-w-lg">
-              Paste or upload Netflix cookies to validate accounts and extract details.
-            </p>
+            {/* Title */}
+            <div>
+              <h1 className="font-bebas text-4xl sm:text-5xl lg:text-6xl tracking-wider text-white" data-testid="dashboard-title">
+                COOKIE <span className="text-primary">CHECKER</span>
+              </h1>
+              <p className="text-white/40 mt-2 text-sm md:text-base max-w-lg">
+                Paste or upload Netflix cookies to validate accounts and extract details.
+              </p>
+            </div>
+
+            {/* Admin Notice Board */}
+            <div className="min-w-[260px] max-w-xs bg-black/60 border border-white/10 rounded-md p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bebas tracking-widest text-primary text-sm">📌 ADMIN NOTICE</span>
+                {isEditing ? (
+                  <button
+                    onClick={handleSaveNotice}
+                    className="text-xs text-green-400 hover:text-green-300 font-mono"
+                  >
+                    SAVE
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="text-xs text-white/30 hover:text-white/60 font-mono"
+                  >
+                    EDIT
+                  </button>
+                )}
+              </div>
+              {isEditing ? (
+                <textarea
+                  value={noticeText}
+                  onChange={(e) => setNoticeText(e.target.value)}
+                  className="w-full h-24 bg-black/80 border border-white/10 rounded text-xs text-white/70 p-2 resize-none focus:border-primary focus:outline-none font-mono"
+                  placeholder="Type your notice here..."
+                />
+              ) : (
+                <p className="text-white/50 text-xs font-mono whitespace-pre-wrap">
+                  {noticeText || 'No notice posted.'}
+                </p>
+              )}
+            </div>
           </motion.div>
 
           <motion.div
