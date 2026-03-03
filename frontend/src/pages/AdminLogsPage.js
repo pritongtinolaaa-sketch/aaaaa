@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { ScrollText, Trash2, Copy, Check, Loader2, Mail, CreditCard, Globe, Calendar, Key, ChevronDown, AlertCircle, Download } from 'lucide-react';
+import { ScrollText, Trash2, Copy, Check, Loader2, Mail, CreditCard, Globe, Calendar, Key, ChevronDown, AlertCircle, Download, AlertTriangle } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -166,7 +166,11 @@ export default function AdminLogsPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.03 }}
                   data-testid={`log-card-${idx}`}
-                  className="bg-black/60 backdrop-blur-md border border-white/10 rounded-md overflow-hidden hover:border-green-500/20 transition-colors"
+                  className={`bg-black/60 backdrop-blur-md border rounded-md overflow-hidden transition-colors ${
+                    log.is_free_cookie
+                      ? 'border-red-500/40 hover:border-red-500/60'
+                      : 'border-white/10 hover:border-green-500/20'
+                  }`}
                 >
                   {/* Header */}
                   <div className="px-5 py-4 flex items-start justify-between gap-4">
@@ -174,6 +178,13 @@ export default function AdminLogsPage() {
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <div className="w-2 h-2 rounded-full bg-green-400" />
                         <Badge className="bg-green-500/20 text-green-400 border border-green-500/30 text-xs font-mono">VALID</Badge>
+                        {/* 🔴 FREE COOKIE DUPLICATE BADGE */}
+                        {log.is_free_cookie && (
+                          <Badge className="bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-mono flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" />
+                            IN FREE COOKIES
+                          </Badge>
+                        )}
                         <span className="text-xs text-white/30">
                           {new Date(log.created_at).toLocaleString()}
                         </span>
@@ -208,6 +219,12 @@ export default function AdminLogsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                      {/* 🔴 BIG RED WARNING ICON BESIDE DOWNLOAD */}
+                      {log.is_free_cookie && (
+                        <div title="Already in Free Cookies!" className="flex items-center justify-center w-8 h-8">
+                          <AlertTriangle className="w-5 h-5 text-red-500" />
+                        </div>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
