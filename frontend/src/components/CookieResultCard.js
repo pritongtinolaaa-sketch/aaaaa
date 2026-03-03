@@ -113,9 +113,16 @@ export default function CookieResultCard({ result, index }) {
           <div className={`w-2 h-2 rounded-full ${config.dot}`} />
           <span className="font-mono text-xs text-white/30">COOKIE #{index + 1}</span>
         </div>
-        <Badge className={`${config.badge} text-xs font-mono uppercase`} data-testid={`cookie-status-${index}`}>
-          {result.status}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge className={`${config.badge} text-xs font-mono uppercase`} data-testid={`cookie-status-${index}`}>
+            {result.status}
+          </Badge>
+          {result.is_free_cookie && (
+            <span className="bg-red-600 text-white text-xs font-mono font-bold px-2 py-0.5 rounded-sm tracking-widest uppercase">
+              DUPE
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Body */}
