@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Key, Plus, Trash2, Eye, EyeOff, Users, Monitor, Copy, X, Loader2, KeyRound } from 'lucide-react';
+import { Key, Plus, Trash2, Eye, EyeOff, Users, Monitor, Copy, X, Loader2, KeyRound, Calendar, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
@@ -19,10 +19,12 @@ export default function AdminPage() {
   const [newLabel, setNewLabel] = useState('');
   const [newMaxDevices, setNewMaxDevices] = useState(1);
   const [customKey, setCustomKey] = useState('');
+  const [newExpiresAt, setNewExpiresAt] = useState('');
   const [creating, setCreating] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState({});
   const [newKeyValue, setNewKeyValue] = useState(null);
   const [expandedSessions, setExpandedSessions] = useState(null);
+  const [editingExpiry, setEditingExpiry] = useState({});
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -52,12 +54,14 @@ export default function AdminPage() {
       const res = await axios.post(`${API}/admin/keys`, {
         label: newLabel,
         max_devices: newMaxDevices,
-        custom_key: customKey.trim() || undefined
+        custom_key: customKey.trim() || undefined,
+        expires_at: newExpiresAt || undefined,
       }, { headers });
       setNewKeyValue(res.data.key_value);
       setNewLabel('');
       setNewMaxDevices(1);
       setCustomKey('');
+      setNewExpiresAt('');
       fetchKeys();
       toast.success('Key created');
     } catch (err) {
@@ -96,6 +100,17 @@ export default function AdminPage() {
     }
   };
 
+  const updateExpiry = async (keyId, expiresAt) => {
+    try {
+      await axios.patch(`${API}/admin/keys/${keyId}`, { expires_at: expiresAt || '' }, { headers });
+      fetchKeys();
+      setEditingExpiry(prev => ({ ...prev, [keyId]: false }));
+      toast.success(expiresAt ? 'Expiry updated' : 'Expiry removed');
+    } catch {
+      toast.error('Failed to update expiry');
+    }
+  };
+
   const copyText = async (text) => {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -114,6 +129,17 @@ export default function AdminPage() {
     } catch {
       toast.error('Copy failed');
     }
+  };
+
+  const getExpiryStatus = (expiresAt) => {
+    if (!expiresAt) return null;
+    const expiry = new Date(expiresAt);
+    const now = new Date();
+    const diffDays = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return { label: 'EXPIRED', color: 'text-red-400 border-red-500/30 bg-red-500/10' };
+    if (diffDays <= 3) return { label: `${diffDays}d left`, color: 'text-orange-400 border-orange-500/30 bg-orange-500/10' };
+    if (diffDays <= 7) return { label: `${diffDays}d left`, color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' };
+    return { label: `${diffDays}d left`, color: 'text-green-400 border-green-500/30 bg-green-500/10' };
   };
 
   if (!user?.is_master) return null;
@@ -197,6 +223,16 @@ export default function AdminPage() {
                 data-testid="create-key-devices"
               />
             </div>
+            <div className="w-44">
+              <label className="text-xs text-white/40 uppercase tracking-wide mb-1.5 block">Expiry <span className="text-white/20">(optional)</span></label>
+              <Input
+                type="date"
+                value={newExpiresAt}
+                onChange={e => setNewExpiresAt(e.target.value)}
+                className="bg-black/50 border-white/10 focus:border-primary text-white h-11 [color-scheme:dark]"
+                data-testid="create-key-expiry"
+              />
+            </div>
             <Button
               onClick={createKey}
               disabled={creating}
@@ -220,114 +256,180 @@ export default function AdminPage() {
               <p>No keys found</p>
             </div>
           ) : (
-            keys.map((keyItem, idx) => (
-              <motion.div
-                key={keyItem.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.05 }}
-                data-testid={`key-card-${idx}`}
-                className="bg-black/60 backdrop-blur-md border border-white/10 rounded-md overflow-hidden hover:border-white/15 transition-colors"
-              >
-                <div className="px-5 py-4 flex items-center justify-between flex-wrap gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-medium">{keyItem.label}</span>
-                      {keyItem.is_master && (
-                        <Badge className="bg-primary/20 text-primary border border-primary/30 text-xs">MASTER</Badge>
+            keys.map((keyItem, idx) => {
+              const expiryStatus = getExpiryStatus(keyItem.expires_at);
+              return (
+                <motion.div
+                  key={keyItem.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  data-testid={`key-card-${idx}`}
+                  className="bg-black/60 backdrop-blur-md border border-white/10 rounded-md overflow-hidden hover:border-white/15 transition-colors"
+                >
+                  <div className="px-5 py-4 flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-white font-medium">{keyItem.label}</span>
+                        {keyItem.is_master && (
+                          <Badge className="bg-primary/20 text-primary border border-primary/30 text-xs">MASTER</Badge>
+                        )}
+                        {expiryStatus && (
+                          <Badge className={`border text-xs font-mono ${expiryStatus.color}`}>
+                            <Clock className="w-3 h-3 mr-1" />
+                            {expiryStatus.label}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 mt-1 text-sm flex-wrap">
+                        <span className="font-mono text-white/30">{keyItem.key_preview}</span>
+                        <span className="flex items-center gap-1 text-white/30">
+                          <Monitor className="w-3.5 h-3.5" />
+                          {keyItem.session_count}/{keyItem.max_devices} devices
+                        </span>
+                        {keyItem.expires_at && (
+                          <span className="flex items-center gap-1 text-white/20 text-xs">
+                            <Calendar className="w-3 h-3" />
+                            Expires {new Date(keyItem.expires_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Inline expiry editor */}
+                      {editingExpiry[keyItem.id] && (
+                        <div className="flex items-center gap-2 mt-3">
+                          <Input
+                            type="date"
+                            defaultValue={keyItem.expires_at?.slice(0, 10) || ''}
+                            id={`expiry-input-${keyItem.id}`}
+                            className="bg-black/50 border-white/10 focus:border-primary text-white h-8 w-44 text-xs [color-scheme:dark]"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              const val = document.getElementById(`expiry-input-${keyItem.id}`).value;
+                              updateExpiry(keyItem.id, val);
+                            }}
+                            className="h-8 bg-primary/20 hover:bg-primary/40 text-primary text-xs px-3"
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => updateExpiry(keyItem.id, '')}
+                            className="h-8 text-white/30 hover:text-red-400 text-xs px-3"
+                          >
+                            Remove
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingExpiry(prev => ({ ...prev, [keyItem.id]: false }))}
+                            className="h-8 text-white/20 hover:text-white px-2"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-4 mt-1 text-sm">
-                      <span className="font-mono text-white/30">{keyItem.key_preview}</span>
-                      <span className="flex items-center gap-1 text-white/30">
-                        <Monitor className="w-3.5 h-3.5" />
-                        {keyItem.session_count}/{keyItem.max_devices} devices
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    {revealedKeys[keyItem.id] ? (
-                      <div className="flex items-center gap-2">
-                        <code className="font-mono text-xs text-green-400 bg-black/60 px-2 py-1 rounded max-w-[200px] truncate">
-                          {revealedKeys[keyItem.id]}
-                        </code>
-                        <Button size="sm" variant="ghost" onClick={() => copyText(revealedKeys[keyItem.id])} className="text-white/30 hover:text-white" data-testid={`copy-key-${idx}`}>
-                          <Copy className="w-3.5 h-3.5" />
+                    <div className="flex items-center gap-2">
+                      {revealedKeys[keyItem.id] ? (
+                        <div className="flex items-center gap-2">
+                          <code className="font-mono text-xs text-green-400 bg-black/60 px-2 py-1 rounded max-w-[200px] truncate">
+                            {revealedKeys[keyItem.id]}
+                          </code>
+                          <Button size="sm" variant="ghost" onClick={() => copyText(revealedKeys[keyItem.id])} className="text-white/30 hover:text-white" data-testid={`copy-key-${idx}`}>
+                            <Copy className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setRevealedKeys(prev => { const n = { ...prev }; delete n[keyItem.id]; return n; })} className="text-white/30 hover:text-white">
+                            <EyeOff className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="ghost" onClick={() => revealKey(keyItem.id)} className="text-white/30 hover:text-white" data-testid={`reveal-key-${idx}`}>
+                          <Eye className="w-3.5 h-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setRevealedKeys(prev => { const n = { ...prev }; delete n[keyItem.id]; return n; })} className="text-white/30 hover:text-white">
-                          <EyeOff className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button size="sm" variant="ghost" onClick={() => revealKey(keyItem.id)} className="text-white/30 hover:text-white" data-testid={`reveal-key-${idx}`}>
-                        <Eye className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setExpandedSessions(expandedSessions === keyItem.id ? null : keyItem.id)}
-                      className="text-white/30 hover:text-white"
-                      data-testid={`sessions-key-${idx}`}
-                    >
-                      <Users className="w-3.5 h-3.5" />
-                    </Button>
-                    {!keyItem.is_master && (
+                      )}
+
+                      {/* Expiry edit button */}
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => deleteKey(keyItem.id)}
-                        className="text-white/20 hover:text-red-400 hover:bg-red-500/10"
-                        data-testid={`delete-key-${idx}`}
+                        onClick={() => setEditingExpiry(prev => ({ ...prev, [keyItem.id]: !prev[keyItem.id] }))}
+                        className="text-white/30 hover:text-yellow-400"
+                        title="Set expiry"
+                        data-testid={`expiry-key-${idx}`}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Calendar className="w-3.5 h-3.5" />
                       </Button>
-                    )}
-                  </div>
-                </div>
 
-                {/* Sessions Panel */}
-                <AnimatePresence>
-                  {expandedSessions === keyItem.id && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="px-5 pb-4 pt-2 border-t border-white/5">
-                        <p className="text-xs text-white/30 uppercase tracking-wide mb-3">Active Sessions</p>
-                        {keyItem.active_sessions?.length > 0 ? (
-                          <div className="space-y-2">
-                            {keyItem.active_sessions.map((session, si) => (
-                              <div key={session.session_id} className="flex items-center justify-between bg-black/40 rounded px-3 py-2">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-2 h-2 rounded-full bg-green-400" />
-                                  <span className="font-mono text-xs text-white/40">{session.session_id.slice(0, 8)}...</span>
-                                  <span className="text-xs text-white/20">{new Date(session.created_at).toLocaleDateString()}</span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setExpandedSessions(expandedSessions === keyItem.id ? null : keyItem.id)}
+                        className="text-white/30 hover:text-white"
+                        data-testid={`sessions-key-${idx}`}
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                      </Button>
+                      {!keyItem.is_master && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => deleteKey(keyItem.id)}
+                          className="text-white/20 hover:text-red-400 hover:bg-red-500/10"
+                          data-testid={`delete-key-${idx}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Sessions Panel */}
+                  <AnimatePresence>
+                    {expandedSessions === keyItem.id && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="px-5 pb-4 pt-2 border-t border-white/5">
+                          <p className="text-xs text-white/30 uppercase tracking-wide mb-3">Active Sessions</p>
+                          {keyItem.active_sessions?.length > 0 ? (
+                            <div className="space-y-2">
+                              {keyItem.active_sessions.map((session, si) => (
+                                <div key={session.session_id} className="flex items-center justify-between bg-black/40 rounded px-3 py-2">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-2 h-2 rounded-full bg-green-400" />
+                                    <span className="font-mono text-xs text-white/40">{session.session_id.slice(0, 8)}...</span>
+                                    <span className="text-xs text-white/20">{new Date(session.created_at).toLocaleDateString()}</span>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => revokeSession(keyItem.id, session.session_id)}
+                                    className="h-7 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 text-xs"
+                                    data-testid={`revoke-session-${si}`}
+                                  >
+                                    Revoke
+                                  </Button>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => revokeSession(keyItem.id, session.session_id)}
-                                  className="h-7 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 text-xs"
-                                  data-testid={`revoke-session-${si}`}
-                                >
-                                  Revoke
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-white/20">No active sessions</p>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            ))
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-white/20">No active sessions</p>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })
           )}
         </div>
       </div>
