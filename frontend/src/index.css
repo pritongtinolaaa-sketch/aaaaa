@@ -82,3 +82,9 @@
     border-bottom-width: inherit;
   }
 }
+
+/* Hide Emergent badge */
+#emergent-badge {
+  display: none !important;
+}
+

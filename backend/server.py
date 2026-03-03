@@ -997,6 +997,40 @@ async def force_refresh_tokens(user: dict = Depends(require_admin)):
     free_cookies = await db.free_cookies.find({}, {"_id": 0}).to_list(500)
     if not free_cookies:
         return {"message": "No free cookies to refresh", "refreshed": 0, "dead": 0, "total": 0}
+@api_router.post("/free-cookies/{cookie_id}/refresh-token")
+async def refresh_single_free_cookie_token(cookie_id: str, user: dict = Depends(get_current_user)):
+    fc = await db.free_cookies.find_one({"id": cookie_id}, {"_id": 0})
+    if not fc:
+        raise HTTPException(status_code=404, detail="Cookie not found")
+
+    cookies_dict = None
+    if fc.get("browser_cookies"):
+        cookies_dict = parse_cookie_string_to_dict(fc["browser_cookies"])
+    if not cookies_dict or not cookies_dict.get("NetflixId"):
+        if fc.get("full_cookie"):
+            cookies_dict = parse_cookies_auto(fc["full_cookie"])
+    if not cookies_dict:
+        raise HTTPException(status_code=400, detail="Cookie data is invalid or expired")
+
+    success, nft, nft_err = await generate_nftoken(cookies_dict)
+    if success and nft:
+        await db.free_cookies.update_one(
+            {"id": cookie_id},
+            {"$set": {
+                "nftoken": nft,
+                "nftoken_link": f"https://netflix.com?nftoken={nft}",
+                "is_alive": True,
+                "last_refreshed": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        return {"nftoken": nft, "nftoken_link": f"https://netflix.com?nftoken={nft}"}
+    else:
+        await db.free_cookies.update_one(
+            {"id": cookie_id},
+            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+        )
+        raise HTTPException(status_code=400, detail=nft_err or "Failed to generate token — cookie may be dead")
+
 
     refreshed = 0
     dead = 0

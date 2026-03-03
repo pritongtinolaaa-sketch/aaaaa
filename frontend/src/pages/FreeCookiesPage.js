@@ -7,7 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { toast } from 'sonner';
 import {
   Gift, Trash2, Copy, Check, Loader2, Mail, CreditCard, Globe, Calendar,
-  Clock, Users, Key, ChevronDown, AlertCircle, Link2, Settings, RefreshCw, Tv, Monitor
+  Clock, Users, Key, ChevronDown, AlertCircle, Link2, Settings, RefreshCw, Tv, Monitor, Smartphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -57,6 +57,10 @@ function FreeCookieCard({ cookie, index, isAdmin, onDelete }) {
   const [tvCode, setTvCode] = useState('');
   const [tvLoading, setTvLoading] = useState(false);
   const [tvResult, setTvResult] = useState(null);
+  const [tokenRefreshing, setTokenRefreshing] = useState(false);
+  const [currentNftoken, setCurrentNftoken] = useState(cookie.nftoken);
+  const [currentNftokenLink, setCurrentNftokenLink] = useState(cookie.nftoken_link);
+  const [lastRefreshed, setLastRefreshed] = useState(cookie.last_refreshed);
   const { token } = useAuth();
 
   const isAlive = cookie.is_alive !== false;
@@ -83,6 +87,23 @@ function FreeCookieCard({ cookie, index, isAdmin, onDelete }) {
     }
   };
 
+  const handleRefreshToken = async () => {
+    setTokenRefreshing(true);
+    try {
+      const res = await axios.post(`${API}/free-cookies/${cookie.id}/refresh-token`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCurrentNftoken(res.data.nftoken);
+      setCurrentNftokenLink(res.data.nftoken_link);
+      setLastRefreshed(new Date().toISOString());
+      toast.success('Token refreshed!');
+    } catch {
+      toast.error('Failed to refresh token');
+    } finally {
+      setTokenRefreshing(false);
+    }
+  };
+
   return (
     <div
       data-testid={`free-cookie-card-${index}`}
@@ -96,10 +117,10 @@ function FreeCookieCard({ cookie, index, isAdmin, onDelete }) {
           <Badge className={`${isAlive ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'} border text-xs font-mono`}>
             {isAlive ? 'ALIVE' : 'DEAD'}
           </Badge>
-          {cookie.last_refreshed && (
+          {lastRefreshed && (
             <span className="text-[10px] text-white/15 font-mono flex items-center gap-1">
               <RefreshCw className="w-2.5 h-2.5" />
-              {new Date(cookie.last_refreshed).toLocaleTimeString()}
+              {new Date(lastRefreshed).toLocaleTimeString()}
             </span>
           )}
         </div>
@@ -129,29 +150,55 @@ function FreeCookieCard({ cookie, index, isAdmin, onDelete }) {
       </div>
 
       {/* NFToken */}
-      {cookie.nftoken && (
+      {currentNftoken && (
         <div className="px-5 py-3 border-t border-white/5 space-y-2">
-          <div className="flex items-center gap-2">
-            <Key className="w-4 h-4 text-primary/60" />
-            <span className="text-xs text-white/40 uppercase tracking-wide">NFToken</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Key className="w-4 h-4 text-primary/60" />
+              <span className="text-xs text-white/40 uppercase tracking-wide">NFToken</span>
+            </div>
+            <button
+              onClick={handleRefreshToken}
+              disabled={tokenRefreshing}
+              data-testid={`refresh-nftoken-${index}`}
+              className="flex items-center gap-1 text-[10px] text-white/30 hover:text-green-400 transition-colors disabled:opacity-50"
+            >
+              {tokenRefreshing
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : <RefreshCw className="w-3 h-3" />
+              }
+              <span className="uppercase tracking-wide font-mono">Refresh Token</span>
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <code className="flex-1 font-mono text-xs text-primary/80 bg-black/40 px-3 py-2 rounded truncate" data-testid={`free-nftoken-${index}`}>
-              {cookie.nftoken}
+              {currentNftoken}
             </code>
-            <CopyBtn text={cookie.nftoken} testId={`free-nftoken-copy-${index}`} />
+            <CopyBtn text={currentNftoken} testId={`free-nftoken-copy-${index}`} />
           </div>
-          {cookie.nftoken_link && (
-            <a
-              href={cookie.nftoken_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid={`free-nftoken-link-${index}`}
-              className="flex items-center justify-center gap-2 mt-2 py-2.5 px-4 rounded-sm text-sm font-bebas tracking-widest uppercase bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-all hover:scale-[1.01] active:scale-[0.99]"
-            >
-              <Link2 className="w-4 h-4" />
-              Open Netflix with Token
-            </a>
+          {currentNftokenLink && (
+            <div className="flex items-center gap-2 mt-2">
+              <a
+                href={currentNftokenLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid={`free-nftoken-link-${index}`}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-sm text-sm font-bebas tracking-widest uppercase bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-all hover:scale-[1.01] active:scale-[0.99]"
+              >
+                <Link2 className="w-4 h-4" />
+                Open Netflix with Token
+              </a>
+              <a
+                href={`https://www.netflix.com/unsupported?nftoken=${currentNftoken}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid={`free-nftoken-unsupported-${index}`}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-sm text-sm font-bebas tracking-widest uppercase bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-all hover:scale-[1.01] active:scale-[0.99]"
+              >
+                <Smartphone className="w-4 h-4" />
+                Open in Phone
+              </a>
+            </div>
           )}
         </div>
       )}
@@ -334,11 +381,18 @@ export default function FreeCookiesPage() {
     <div className="min-h-screen bg-[#050505]">
       <div className="max-w-5xl mx-auto px-6 py-6 md:py-10">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="flex items-center gap-4 mb-10">
-            <Gift className="w-7 h-7 text-green-400" />
-            <h1 className="font-bebas text-4xl sm:text-5xl tracking-wider text-white" data-testid="free-cookies-title">
-              FREE <span className="text-green-400">COOKIES</span>
-            </h1>
+          <div className="flex items-center justify-between mb-10">
+            <div className="flex items-center gap-4">
+              <Gift className="w-7 h-7 text-green-400" />
+              <h1 className="font-bebas text-4xl sm:text-5xl tracking-wider text-white" data-testid="free-cookies-title">
+                FREE <span className="text-green-400">COOKIES</span>
+              </h1>
+            </div>
+            {!isAdmin && !loading && cookies.length > 0 && (
+              <span className="font-bebas text-lg tracking-widest text-green-400">
+                {cookies.length} COOKIES AVAILABLE
+              </span>
+            )}
           </div>
         </motion.div>
 
