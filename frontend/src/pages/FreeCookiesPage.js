@@ -59,11 +59,14 @@ function FreeCookieSmallCard({ cookie, index, isAdmin, onDelete, onClick }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.04 }}
       onClick={onClick}
-      className={`cursor-pointer bg-black/60 backdrop-blur-md border border-white/10 rounded-md p-4 transition-all duration-150
-        shadow-[0_6px_0_rgba(255,255,255,0.06)]
-        hover:border-green-500/30 hover:bg-black/80
-        hover:-translate-y-1 hover:shadow-[0_8px_0_rgba(255,255,255,0.08)]
-        active:translate-y-1 active:shadow-[0_2px_0_rgba(255,255,255,0.04)]`}
+      className={`cursor-pointer rounded-xl p-4 transition-all duration-150
+        bg-gradient-to-b from-white/10 to-white/[0.03]
+        border border-white/20
+        shadow-[inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(0,0,0,0.4),0_8px_24px_rgba(0,0,0,0.6)]
+        hover:from-white/[0.13] hover:to-white/[0.05]
+        hover:border-green-500/40
+        hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(0,0,0,0.5),0_12px_32px_rgba(0,0,0,0.7)]
+        active:scale-[0.97]`}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -166,7 +169,8 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 12 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className="relative w-[calc(100vw-2rem)] sm:w-[500px] max-h-[85vh] bg-[#0a0a0a] border border-white/10 rounded-md z-10 flex flex-col overflow-hidden"
+          className="relative w-[calc(100vw-2rem)] sm:w-[500px] max-h-[85vh] bg-[#0a0a0a] border border-white/10 rounded-2xl z-10 flex flex-col overflow-hidden
+            shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_24px_48px_rgba(0,0,0,0.8)]"
         >
           <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
@@ -217,7 +221,7 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 font-mono text-xs text-primary/80 bg-black/40 px-3 py-2 rounded truncate" data-testid={`free-nftoken-${index}`}>
+                  <code className="flex-1 font-mono text-xs text-primary/80 bg-black/40 px-3 py-2 rounded-lg truncate" data-testid={`free-nftoken-${index}`}>
                     {currentNftoken}
                   </code>
                   <CopyBtn text={currentNftoken} testId={`free-nftoken-copy-${index}`} />
@@ -229,7 +233,7 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
                       target="_blank"
                       rel="noopener noreferrer"
                       data-testid={`free-nftoken-link-${index}`}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-sm text-sm font-bebas tracking-widest uppercase bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-all"
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-all"
                     >
                       <Link2 className="w-4 h-4" />
                       Open Netflix with Token
@@ -239,7 +243,7 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
                       target="_blank"
                       rel="noopener noreferrer"
                       data-testid={`free-nftoken-unsupported-${index}`}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-sm text-sm font-bebas tracking-widest uppercase bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-all"
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-all"
                     >
                       <Smartphone className="w-4 h-4" />
                       Open in Phone
@@ -260,7 +264,7 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
                     value={tvCode}
                     onChange={e => setTvCode(e.target.value)}
                     placeholder="Enter TV code (e.g. 12345678)"
-                    className="bg-black/50 border-white/10 focus:border-blue-400 text-white placeholder:text-white/20 h-10 font-mono text-sm"
+                    className="bg-black/50 border-white/10 focus:border-blue-400 text-white placeholder:text-white/20 h-10 font-mono text-sm rounded-xl"
                     data-testid={`tv-code-input-${index}`}
                     disabled={tvLoading}
                     onKeyDown={e => e.key === 'Enter' && handleTvCode()}
@@ -269,13 +273,13 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
                     onClick={handleTvCode}
                     disabled={tvLoading || !tvCode.trim()}
                     data-testid={`tv-code-submit-${index}`}
-                    className="bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 font-bebas tracking-widest uppercase rounded-sm h-10 px-5 shrink-0"
+                    className="bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 font-bebas tracking-widest uppercase rounded-xl h-10 px-5 shrink-0"
                   >
                     {tvLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Monitor className="w-4 h-4 mr-1.5" />ACTIVATE</>}
                   </Button>
                 </div>
                 {tvResult && (
-                  <div className={`mt-2 text-xs px-3 py-2 rounded ${tvResult.success ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`} data-testid={`tv-code-result-${index}`}>
+                  <div className={`mt-2 text-xs px-3 py-2 rounded-xl ${tvResult.success ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`} data-testid={`tv-code-result-${index}`}>
                     {tvResult.message}
                   </div>
                 )}
@@ -297,7 +301,7 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
                 </button>
                 {showBrowserCookies && (
                   <div className="relative px-5 pb-4">
-                    <pre className="text-xs font-mono text-green-400/60 bg-black/60 rounded p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
+                    <pre className="text-xs font-mono text-green-400/60 bg-black/60 rounded-xl p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
                       {cookie.browser_cookies}
                     </pre>
                     <div className="absolute top-2 right-7">
@@ -322,7 +326,7 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
                 </button>
                 {showCookie && (
                   <div className="relative px-5 pb-4">
-                    <pre className="text-xs font-mono text-white/40 bg-black/60 rounded p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
+                    <pre className="text-xs font-mono text-white/40 bg-black/60 rounded-xl p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
                       {cookie.full_cookie}
                     </pre>
                     <div className="absolute top-2 right-7">
@@ -446,7 +450,8 @@ export default function FreeCookiesPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-black/60 backdrop-blur-md border border-white/10 rounded-md p-6 mb-8"
+            className="bg-gradient-to-b from-white/10 to-white/[0.03] border border-white/20 rounded-2xl p-6 mb-8
+              shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_8px_24px_rgba(0,0,0,0.6)]"
             data-testid="free-cookies-admin-controls"
           >
             <div className="flex items-center gap-3 mb-4">
@@ -461,7 +466,7 @@ export default function FreeCookiesPage() {
                   min={1}
                   value={limitInput}
                   onChange={e => setLimitInput(e.target.value)}
-                  className="bg-black/50 border-white/10 focus:border-primary text-white h-10"
+                  className="bg-black/50 border-white/10 focus:border-primary text-white h-10 rounded-xl"
                   data-testid="free-cookies-limit-input"
                 />
               </div>
@@ -469,7 +474,7 @@ export default function FreeCookiesPage() {
                 onClick={updateLimit}
                 disabled={savingLimit}
                 data-testid="save-limit-btn"
-                className="bg-primary hover:bg-red-700 text-white font-bebas tracking-widest uppercase rounded-sm h-10 px-6"
+                className="bg-primary hover:bg-red-700 text-white font-bebas tracking-widest uppercase rounded-xl h-10 px-6"
               >
                 {savingLimit ? <Loader2 className="w-4 h-4 animate-spin" /> : 'SAVE'}
               </Button>
@@ -488,7 +493,7 @@ export default function FreeCookiesPage() {
                 onClick={refreshTokens}
                 disabled={refreshing || cookies.length === 0}
                 data-testid="refresh-tokens-btn"
-                className="bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 font-bebas tracking-widest uppercase rounded-sm h-10 px-6"
+                className="bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 font-bebas tracking-widest uppercase rounded-xl h-10 px-6"
               >
                 {refreshing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                 REFRESH TOKENS NOW
@@ -510,7 +515,7 @@ export default function FreeCookiesPage() {
             {isAdmin && <p className="text-xs text-white/15 mt-1">Check cookies on the Dashboard, then add valid ones here.</p>}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {cookies.map((cookie, idx) => (
               <FreeCookieSmallCard
                 key={cookie.id}
