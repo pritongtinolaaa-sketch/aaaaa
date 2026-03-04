@@ -9,6 +9,7 @@ python-multipart
 pydantic[email]
 httpx
 beautifulsoup4
+lxml
 aiohttp
 requests
 python-dotenv
