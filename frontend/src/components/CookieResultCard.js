@@ -11,17 +11,17 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const statusConfig = {
   valid: {
     badge: 'bg-green-500/20 text-green-400 border border-green-500/30',
-    glow: 'hover:border-green-500/30',
+    glow: 'hover:border-green-500/40',
     dot: 'bg-green-400',
   },
   expired: {
     badge: 'bg-red-500/20 text-red-400 border border-red-500/30',
-    glow: 'hover:border-red-500/30',
+    glow: 'hover:border-red-500/40',
     dot: 'bg-red-400',
   },
   invalid: {
     badge: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
-    glow: 'hover:border-yellow-500/30',
+    glow: 'hover:border-yellow-500/40',
     dot: 'bg-yellow-400',
   },
 };
@@ -61,7 +61,7 @@ function CopyButton({ text, testId }) {
     }
   };
   return (
-    <button onClick={handleCopy} data-testid={testId} className="p-1.5 rounded bg-white/5 hover:bg-white/10 transition-colors">
+    <button onClick={handleCopy} data-testid={testId} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
       {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-white/40" />}
     </button>
   );
@@ -105,10 +105,13 @@ export default function CookieResultCard({ result, index }) {
   return (
     <div
       data-testid={`cookie-result-card-${index}`}
-      className={`bg-black/60 backdrop-blur-md border border-white/10 rounded-md overflow-hidden transition-all duration-150
-        shadow-[0_6px_0_rgba(255,255,255,0.06)]
-        hover:-translate-y-1 hover:shadow-[0_8px_0_rgba(255,255,255,0.08)]
-        active:translate-y-1 active:shadow-[0_2px_0_rgba(255,255,255,0.04)]
+      className={`rounded-2xl overflow-hidden transition-all duration-150
+        bg-gradient-to-b from-white/10 to-white/[0.03]
+        border border-white/20
+        shadow-[inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(0,0,0,0.4),0_8px_24px_rgba(0,0,0,0.6)]
+        hover:from-white/[0.13] hover:to-white/[0.05]
+        hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(0,0,0,0.5),0_12px_32px_rgba(0,0,0,0.7)]
+        active:scale-[0.99]
         ${config.glow}`}
     >
       {/* Header */}
@@ -122,7 +125,7 @@ export default function CookieResultCard({ result, index }) {
             {result.status}
           </Badge>
           {result.is_free_cookie && (
-            <span className="bg-red-600 text-white text-xs font-mono font-bold px-2 py-0.5 rounded-sm tracking-widest uppercase">
+            <span className="bg-red-600 text-white text-xs font-mono font-bold px-2 py-0.5 rounded-lg tracking-widest uppercase">
               DUPE
             </span>
           )}
@@ -158,7 +161,7 @@ export default function CookieResultCard({ result, index }) {
             <span className="text-xs text-white/40 uppercase tracking-wide">NFToken</span>
           </div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 font-mono text-xs text-primary/80 bg-black/40 px-3 py-2 rounded truncate" data-testid={`nftoken-value-${index}`}>
+            <code className="flex-1 font-mono text-xs text-primary/80 bg-black/40 px-3 py-2 rounded-xl truncate" data-testid={`nftoken-value-${index}`}>
               {result.nftoken}
             </code>
             <CopyButton text={result.nftoken} testId={`nftoken-copy-${index}`} />
@@ -169,7 +172,7 @@ export default function CookieResultCard({ result, index }) {
               target="_blank"
               rel="noopener noreferrer"
               data-testid={`nftoken-link-${index}`}
-              className="flex items-center justify-center gap-2 mt-2 py-2.5 px-4 rounded-sm text-sm font-bebas tracking-widest uppercase bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-all hover:scale-[1.01] active:scale-[0.99]"
+              className="flex items-center justify-center gap-2 mt-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-all hover:scale-[1.01] active:scale-[0.99]"
             >
               <Link2 className="w-4 h-4" />
               Open Netflix with Token
@@ -185,7 +188,7 @@ export default function CookieResultCard({ result, index }) {
             onClick={handleAddToFree}
             disabled={addingFree || addedFree}
             data-testid={`add-free-cookie-${index}`}
-            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-sm text-sm font-bebas tracking-widest uppercase transition-all ${
+            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bebas tracking-widest uppercase transition-all ${
               addedFree
                 ? 'bg-green-500/10 text-green-400 border border-green-500/20 cursor-default'
                 : 'bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 hover:scale-[1.01] active:scale-[0.99]'
@@ -217,7 +220,7 @@ export default function CookieResultCard({ result, index }) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="relative px-5 pb-4">
-                <pre className="text-xs font-mono text-green-400/60 bg-black/60 rounded p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
+                <pre className="text-xs font-mono text-green-400/60 bg-black/40 rounded-xl p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
                   {result.browser_cookies}
                 </pre>
                 <div className="absolute top-2 right-7">
@@ -243,7 +246,7 @@ export default function CookieResultCard({ result, index }) {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="relative px-5 pb-4">
-              <pre className="text-xs font-mono text-white/40 bg-black/60 rounded p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
+              <pre className="text-xs font-mono text-white/40 bg-black/40 rounded-xl p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
                 {result.full_cookie}
               </pre>
               <div className="absolute top-2 right-7">
