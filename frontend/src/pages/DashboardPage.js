@@ -330,7 +330,7 @@ export default function DashboardPage() {
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
-                  className={`border-2 border-dashed rounded-2xl text-center transition-all ${
+                  className={`border-2 border-dashed rounded-2xl transition-all ${
                     selectedFiles.length > 0 ? 'p-4' : 'p-8 sm:p-12'
                   } ${
                     dragActive
@@ -352,7 +352,11 @@ export default function DashboardPage() {
                           Remove all
                         </button>
                       </div>
-                      <div className="space-y-2">
+                      {/* Scrollable file list — fixed height, no box growth */}
+                      <div
+                        className="space-y-2 max-h-48 overflow-y-auto pr-1"
+                        style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}
+                      >
                         {selectedFiles.map((f, i) => (
                           <motion.div
                             key={i}
@@ -408,7 +412,7 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* Add more files button when files already selected */}
+                {/* Add more files when files already selected */}
                 {selectedFiles.length > 0 && (
                   <div className="flex items-center gap-2 mt-2">
                     <input
