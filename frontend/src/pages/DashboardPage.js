@@ -460,13 +460,15 @@ export default function DashboardPage() {
                 transition={{ duration: 0.5 }}
                 className="mt-10"
               >
+                {/* ✅ FIXED: stacks vertically on mobile, side-by-side on sm+ */}
                 <div
-                  className="flex items-center justify-between gap-6 mb-6 pb-6 border-b border-white/5"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-6 border-b border-white/5"
                   data-testid="results-summary"
                 >
-                  <div className="flex items-center gap-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
                     <h2 className="font-bebas text-2xl tracking-wider text-white">RESULTS</h2>
-                    <div className="flex items-center gap-4 text-sm">
+                    {/* ✅ FIXED: wraps stats onto next line on mobile */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                       <span className="flex items-center gap-1.5 text-white/60">
                         Total: <strong className="text-white">{results.total}</strong>
                       </span>
@@ -484,12 +486,13 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
+                  {/* ✅ FIXED: export button full width on mobile */}
                   {results.valid_count > 0 && (
                     <Button
                       onClick={handleExportResults}
                       data-testid="export-results-btn"
                       variant="outline"
-                      className="bg-transparent border-green-500/30 text-green-400 hover:bg-green-500/10 hover:border-green-500/50 font-bebas tracking-widest uppercase rounded-sm text-sm gap-2"
+                      className="w-full sm:w-auto bg-transparent border-green-500/30 text-green-400 hover:bg-green-500/10 hover:border-green-500/50 font-bebas tracking-widest uppercase rounded-sm text-sm gap-2"
                     >
                       <Download className="w-4 h-4" />
                       EXPORT VALID
