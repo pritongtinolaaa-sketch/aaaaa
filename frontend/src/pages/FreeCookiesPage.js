@@ -287,6 +287,7 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
               </div>
             )}
 
+            {/* Admin only — Browser Cookies */}
             {isAdmin && cookie.browser_cookies && (
               <div className="border-t border-white/5">
                 <button
@@ -312,7 +313,8 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
               </div>
             )}
 
-            {cookie.full_cookie && (
+            {/* Admin only — Original Cookie */}
+            {isAdmin && cookie.full_cookie && (
               <div className="border-t border-white/5">
                 <button
                   onClick={() => setShowCookie(p => !p)}
