@@ -167,15 +167,17 @@ export default function DashboardPage() {
       toast.error('No valid cookies to export');
       return;
     }
-    const separator = '\n=============================================================\n';
     const content = validResults.map(r => {
       const lines = [];
       if (r.email) lines.push(`Email: ${r.email}`);
       if (r.plan) lines.push(`Plan: ${r.plan}`);
-      lines.push('');
+      if (r.country) lines.push(`Country: ${r.country}`);
+      if (r.member_since) lines.push(`Member Since: ${r.member_since}`);
+      lines.push('==================================================');
       lines.push(r.full_cookie || '');
+      lines.push('==================================================');
       return lines.join('\n');
-    }).join(separator);
+    }).join('\n');
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -352,7 +354,6 @@ export default function DashboardPage() {
                           Remove all
                         </button>
                       </div>
-                      {/* Scrollable file list — fixed height, no box growth */}
                       <div
                         className="space-y-2 max-h-48 overflow-y-auto pr-1"
                         style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}
@@ -412,7 +413,6 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* Add more files when files already selected */}
                 {selectedFiles.length > 0 && (
                   <div className="flex items-center gap-2 mt-2">
                     <input
