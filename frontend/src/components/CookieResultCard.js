@@ -105,7 +105,11 @@ export default function CookieResultCard({ result, index }) {
   return (
     <div
       data-testid={`cookie-result-card-${index}`}
-      className={`bg-black/60 backdrop-blur-md border border-white/10 rounded-md overflow-hidden transition-all duration-300 ${config.glow}`}
+      className={`bg-black/60 backdrop-blur-md border border-white/10 rounded-md overflow-hidden transition-all duration-150
+        shadow-[0_6px_0_rgba(255,255,255,0.06)]
+        hover:-translate-y-1 hover:shadow-[0_8px_0_rgba(255,255,255,0.08)]
+        active:translate-y-1 active:shadow-[0_2px_0_rgba(255,255,255,0.04)]
+        ${config.glow}`}
     >
       {/* Header */}
       <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
@@ -225,7 +229,7 @@ export default function CookieResultCard({ result, index }) {
         </Collapsible>
       )}
 
-      {/* Full Cookie (original input) - Collapsible */}
+      {/* Full Cookie - Collapsible */}
       <Collapsible open={cookieOpen} onOpenChange={setCookieOpen}>
         <div className="border-t border-white/5">
           <CollapsibleTrigger
