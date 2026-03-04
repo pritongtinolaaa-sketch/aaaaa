@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Mail, CreditCard, Calendar, Globe, Clock, Users, ChevronDown, Copy, Check, AlertCircle, Link2, Key, Gift, Loader2 } from 'lucide-react';
+import { Mail, CreditCard, Calendar, Globe, Clock, Users, ChevronDown, Copy, Check, AlertCircle, Link2, Key, Gift, Loader2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 
@@ -73,32 +73,52 @@ export default function CookieResultCard({ result, index }) {
   const [browserCookieOpen, setBrowserCookieOpen] = useState(false);
   const [addingFree, setAddingFree] = useState(false);
   const [addedFree, setAddedFree] = useState(false);
+  const [addingAdmin, setAddingAdmin] = useState(false);
+  const [addedAdmin, setAddedAdmin] = useState(false);
 
   const config = statusConfig[result.status] || statusConfig.invalid;
-
   const hasInfo = result.email || result.plan || result.member_since || result.country || result.next_billing || (result.profiles && result.profiles.length > 0);
+
+  const cookiePayload = {
+    email: result.email,
+    plan: result.plan,
+    country: result.country,
+    member_since: result.member_since,
+    next_billing: result.next_billing,
+    profiles: result.profiles || [],
+    browser_cookies: result.browser_cookies || '',
+    full_cookie: result.full_cookie || '',
+    nftoken: result.nftoken,
+    nftoken_link: result.nftoken_link,
+  };
 
   const handleAddToFree = async () => {
     setAddingFree(true);
     try {
-      await axios.post(`${API}/admin/free-cookies`, {
-        email: result.email,
-        plan: result.plan,
-        country: result.country,
-        member_since: result.member_since,
-        next_billing: result.next_billing,
-        profiles: result.profiles || [],
-        browser_cookies: result.browser_cookies || '',
-        full_cookie: result.full_cookie || '',
-        nftoken: result.nftoken,
-        nftoken_link: result.nftoken_link,
-      }, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post(`${API}/admin/free-cookies`, cookiePayload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setAddedFree(true);
       toast.success('Added to Free Cookies');
     } catch {
       toast.error('Failed to add to Free Cookies');
     } finally {
       setAddingFree(false);
+    }
+  };
+
+  const handleAddToAdmin = async () => {
+    setAddingAdmin(true);
+    try {
+      await axios.post(`${API}/admin/admin-cookies`, cookiePayload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAddedAdmin(true);
+      toast.success('Added to Admin Cookies');
+    } catch {
+      toast.error('Failed to add to Admin Cookies');
+    } finally {
+      setAddingAdmin(false);
     }
   };
 
@@ -125,8 +145,13 @@ export default function CookieResultCard({ result, index }) {
             {result.status}
           </Badge>
           {result.is_free_cookie && (
-            <span className="bg-red-600 text-white text-xs font-mono font-bold px-2 py-0.5 rounded-lg tracking-widest uppercase">
-              DUPE
+            <span className="bg-green-600/20 text-green-400 border border-green-500/30 text-xs font-mono font-bold px-2 py-0.5 rounded-lg tracking-widest uppercase">
+              FREE
+            </span>
+          )}
+          {result.is_admin_cookie && (
+            <span className="bg-purple-600/20 text-purple-400 border border-purple-500/30 text-xs font-mono font-bold px-2 py-0.5 rounded-lg tracking-widest uppercase">
+              ADMIN
             </span>
           )}
         </div>
@@ -181,9 +206,10 @@ export default function CookieResultCard({ result, index }) {
         </div>
       )}
 
-      {/* Add to Free Cookies (Admin only, Valid only) */}
+      {/* Add Buttons (Admin only, Valid only) */}
       {user?.is_master && result.status === 'valid' && (
-        <div className="px-5 py-3 border-t border-white/5">
+        <div className="px-5 py-3 border-t border-white/5 flex flex-col gap-2">
+          {/* Add to Free Cookies */}
           <button
             onClick={handleAddToFree}
             disabled={addingFree || addedFree}
@@ -200,6 +226,26 @@ export default function CookieResultCard({ result, index }) {
               <><Check className="w-4 h-4" />ADDED TO FREE COOKIES</>
             ) : (
               <><Gift className="w-4 h-4" />ADD TO FREE COOKIES</>
+            )}
+          </button>
+
+          {/* Add to Admin Cookies */}
+          <button
+            onClick={handleAddToAdmin}
+            disabled={addingAdmin || addedAdmin}
+            data-testid={`add-admin-cookie-${index}`}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bebas tracking-widest uppercase transition-all ${
+              addedAdmin
+                ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20 cursor-default'
+                : 'bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 hover:scale-[1.01] active:scale-[0.99]'
+            }`}
+          >
+            {addingAdmin ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : addedAdmin ? (
+              <><Check className="w-4 h-4" />ADDED TO ADMIN COOKIES</>
+            ) : (
+              <><ShieldCheck className="w-4 h-4" />ADD TO ADMIN COOKIES</>
             )}
           </button>
         </div>
