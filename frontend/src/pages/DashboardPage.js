@@ -387,7 +387,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   ) : (
-                    <div>
+                    <div className="flex flex-col items-center text-center">
                       <Upload className={`w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 ${dragActive ? 'text-primary' : 'text-white/20'}`} />
                       <p className="text-white/40 mb-1 text-sm sm:text-base">Drag & drop your cookie files here</p>
                       <p className="text-white/20 text-xs sm:text-sm mb-4">Supports .txt and .json files — select multiple at once</p>
