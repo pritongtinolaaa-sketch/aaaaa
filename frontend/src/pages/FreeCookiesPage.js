@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
   Gift, Trash2, Copy, Check, Loader2, Mail, CreditCard, Globe, Calendar,
-  Clock, Users, Key, AlertCircle, Link2, Settings, RefreshCw, Tv, Monitor, Smartphone, X
+  Clock, Users, Key, Link2, Settings, RefreshCw, Tv, Monitor, Smartphone, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -50,7 +50,6 @@ function InfoRow({ icon, label, value }) {
   );
 }
 
-// Small collapsed card
 function FreeCookieSmallCard({ cookie, index, isAdmin, onDelete, onClick }) {
   const isAlive = cookie.is_alive !== false;
   return (
@@ -102,7 +101,6 @@ function FreeCookieSmallCard({ cookie, index, isAdmin, onDelete, onClick }) {
   );
 }
 
-// Full modal
 function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
   const [tvCode, setTvCode] = useState('');
   const [tvLoading, setTvLoading] = useState(false);
@@ -164,13 +162,13 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
         className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40"
       />
 
-      {/* Modal */}
+      {/* Modal — perfectly centered */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 24 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 12 }}
         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        className="fixed inset-x-4 top-[5%] bottom-[5%] sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-[8%] sm:w-[500px] sm:max-h-[84vh] bg-[#0a0a0a] border border-white/10 rounded-md z-50 flex flex-col overflow-hidden"
+        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] sm:w-[500px] max-h-[85vh] bg-[#0a0a0a] border border-white/10 rounded-md z-50 flex flex-col overflow-hidden"
       >
         {/* Modal Header */}
         <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between shrink-0">
@@ -231,7 +229,6 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
                 <CopyBtn text={currentNftoken} testId={`free-nftoken-copy-${index}`} />
               </div>
 
-              {/* Action buttons */}
               {currentNftokenLink && (
                 <div className="flex flex-col sm:flex-row gap-2 pt-1">
                   <a
@@ -305,7 +302,7 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
                 <span className="font-mono uppercase tracking-wide">
                   {showBrowserCookies ? 'Hide' : 'View'} Browser Cookies
                 </span>
-                <span className={`transition-transform duration-200 ${showBrowserCookies ? 'rotate-180' : ''}`}>▾</span>
+                <span className={`transition-transform duration-200 inline-block ${showBrowserCookies ? 'rotate-180' : ''}`}>▾</span>
               </button>
               {showBrowserCookies && (
                 <div className="relative px-5 pb-4">
@@ -331,7 +328,7 @@ function FreeCookieModal({ cookie, index, isAdmin, onClose }) {
                 <span className="font-mono uppercase tracking-wide">
                   {showCookie ? 'Hide' : 'View'} Original Cookie
                 </span>
-                <span className={`transition-transform duration-200 ${showCookie ? 'rotate-180' : ''}`}>▾</span>
+                <span className={`transition-transform duration-200 inline-block ${showCookie ? 'rotate-180' : ''}`}>▾</span>
               </button>
               {showCookie && (
                 <div className="relative px-5 pb-4">
