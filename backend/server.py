@@ -30,6 +30,9 @@ JWT_ALGORITHM = "HS256"
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 # --- Pydantic Models ---
 class KeyLogin(BaseModel):
     key: str
@@ -81,7 +84,6 @@ async def get_current_user(authorization: str = Header(None)):
         key_doc = await db.access_keys.find_one({"id": payload["key_id"]}, {"_id": 0})
         if not key_doc:
             raise HTTPException(status_code=401, detail="Key not found")
-        # Check expiry
         expires_at = key_doc.get("expires_at")
         if expires_at:
             expiry = datetime.fromisoformat(expires_at).replace(tzinfo=timezone.utc)
@@ -145,9 +147,8 @@ def parse_cookies_auto(text):
             return result
     return parse_netscape_cookies(text)
 
-# --- NFToken Generator (from Netflix GraphQL API) ---
+# --- NFToken Generator ---
 async def generate_nftoken(cookies: dict):
-    """Generate Netflix auto-login token from cookies using Netflix's GraphQL API"""
     norm = {}
     for k, v in cookies.items():
         norm[k] = v
@@ -155,7 +156,6 @@ async def generate_nftoken(cookies: dict):
 
     netflix_id = norm.get('NetflixId') or norm.get('netflixid')
     secure_id = norm.get('SecureNetflixId') or norm.get('securenetflixid')
-    nfvdid = norm.get('nfvdid')
 
     if not netflix_id or not secure_id:
         return False, None, f"Missing required cookies (NetflixId, SecureNetflixId)"
@@ -205,7 +205,6 @@ async def generate_nftoken(cookies: dict):
 
 # --- Browser Cookie Enrichment (Playwright) ---
 async def get_browser_data(cookies: dict):
-    """Use headless browser to get full cookies, email from /account/security, and account info"""
     try:
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
@@ -274,7 +273,7 @@ async def get_browser_data(cookies: dict):
                     try:
                         raw_json = ctx_match.group(1)
                         raw_json = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), raw_json)
-                        raw_json = re.sub(r'\\(?!["\\\/bfnrtu])', r'\\\\', raw_json)
+                        raw_json = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw_json)
                         ctx = json.loads(raw_json)
                         models = ctx.get('models', {})
                         user_info = models.get('userInfo', {}).get('data', {})
@@ -488,7 +487,7 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
                                         try:
                                             raw_json = match.group(1)
                                             raw_json = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), raw_json)
-                                            raw_json = re.sub(r'\\(?!["\\\/bfnrtu])', r'\\\\', raw_json)
+                                            raw_json = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw_json)
                                             ctx = json.loads(raw_json)
                                             models = ctx.get('models', {})
                                             user_info = models.get('userInfo', {}).get('data', {})
@@ -568,7 +567,6 @@ async def login(data: KeyLogin):
     if not key_doc:
         raise HTTPException(status_code=401, detail="Invalid access key")
 
-    # Check expiry on login too
     expires_at = key_doc.get("expires_at")
     if expires_at:
         expiry = datetime.fromisoformat(expires_at).replace(tzinfo=timezone.utc)
@@ -623,6 +621,22 @@ _check_semaphore = asyncio.Semaphore(5)
 async def check_cookie_with_semaphore(block, format_type, job_id, index, total, user):
     async with _check_semaphore:
         result = await check_netflix_cookie(block, format_type)
+
+        # ✅ Check BEFORE pushing to db.checks so is_free_cookie is included in results
+        if result["status"] == "valid":
+            is_free_cookie = False
+            if result.get("email"):
+                existing_free = await db.free_cookies.find_one({"email": result["email"]})
+                if existing_free:
+                    is_free_cookie = True
+                    logger.warning(
+                        f"[FREE COOKIE DUPLICATE] Cookie checked by '{user['label']}' "
+                        f"is already in free cookies — email: {result['email']}"
+                    )
+            result["is_free_cookie"] = is_free_cookie  # ✅ Set BEFORE pushing to db.checks
+        else:
+            result["is_free_cookie"] = False
+
         await db.checks.update_one(
             {"id": job_id},
             {
@@ -635,6 +649,7 @@ async def check_cookie_with_semaphore(block, format_type, job_id, index, total, 
                 }
             }
         )
+
         if result["status"] == "valid":
             await db.valid_logs.insert_one({
                 "id": str(uuid.uuid4()),
@@ -650,6 +665,7 @@ async def check_cookie_with_semaphore(block, format_type, job_id, index, total, 
                 "full_cookie": result.get("full_cookie", ""),
                 "nftoken": result.get("nftoken"),
                 "nftoken_link": result.get("nftoken_link"),
+                "is_free_cookie": result["is_free_cookie"],
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
         return result
@@ -691,7 +707,6 @@ async def check_cookies(data: CookieCheckRequest, user: dict = Depends(get_curre
     })
 
     asyncio.create_task(run_bulk_check(check_id, cookie_blocks, data.format_type, user))
-
     return {"id": check_id, "total": total, "status": "processing"}
 
 @api_router.post("/check/file")
@@ -723,7 +738,6 @@ async def check_cookies_file(file: UploadFile = File(...), user: dict = Depends(
     })
 
     asyncio.create_task(run_bulk_check(check_id, cookie_blocks, "auto", user))
-
     return {"id": check_id, "total": total, "status": "processing"}
 
 @api_router.post("/check/files")
@@ -760,7 +774,6 @@ async def check_cookies_files(files: List[UploadFile] = File(...), user: dict = 
     })
 
     asyncio.create_task(run_bulk_check(check_id, all_cookie_blocks, "auto", user))
-
     return {"id": check_id, "total": total, "status": "processing", "filenames": filenames}
 
 @api_router.get("/check/{job_id}/status")
@@ -797,7 +810,6 @@ async def delete_check(check_id: str, user: dict = Depends(get_current_user)):
 # --- NFToken Route ---
 @api_router.post("/nftoken")
 async def get_nftoken(data: CookieCheckRequest, user: dict = Depends(get_current_user)):
-    """Generate NFToken from cookies"""
     if data.format_type == "json":
         cookies = parse_json_cookies(data.cookies_text)
     elif data.format_type == "netscape":
@@ -973,7 +985,6 @@ async def get_free_cookies(user: dict = Depends(get_current_user)):
 
 @api_router.post("/admin/free-cookies/refresh")
 async def force_refresh_tokens(user: dict = Depends(require_admin)):
-    """Manually trigger NFToken refresh for all free cookies and check if alive"""
     free_cookies = await db.free_cookies.find({}, {"_id": 0}).to_list(500)
     if not free_cookies:
         return {"message": "No free cookies to refresh", "refreshed": 0, "dead": 0, "total": 0}
@@ -1053,7 +1064,6 @@ async def refresh_single_free_cookie_token(cookie_id: str, user: dict = Depends(
 
 # --- TV Sign-In Code ---
 async def activate_tv_code(cookies: dict, code: str):
-    """Use Playwright to enter a TV sign-in code on netflix.com/tv8"""
     try:
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
@@ -1164,7 +1174,6 @@ async def activate_tv_code(cookies: dict, code: str):
 
 @api_router.post("/tv-code")
 async def submit_tv_code(data: TVCodeRequest, user: dict = Depends(get_current_user)):
-    """Activate a TV device using a free cookie and a sign-in code"""
     if not data.code.strip():
         raise HTTPException(status_code=400, detail="Enter a TV sign-in code")
 
@@ -1184,8 +1193,8 @@ async def submit_tv_code(data: TVCodeRequest, user: dict = Depends(get_current_u
     success, message = await activate_tv_code(cookies_dict, data.code)
     return {"success": success, "message": message}
 
-# --- NFToken Auto-Refresh for Free Cookies ---
-NFTOKEN_REFRESH_INTERVAL = 10 * 60  # 10 minutes in seconds
+# --- NFToken Auto-Refresh ---
+NFTOKEN_REFRESH_INTERVAL = 10 * 60
 
 MONTH_MAP = {
     'janvier': 'January', 'février': 'February', 'mars': 'March', 'avril': 'April',
@@ -1356,9 +1365,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def seed_master_key():
