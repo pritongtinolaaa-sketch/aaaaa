@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { LayoutDashboard, LogOut, KeyRound, ScrollText, Gift, Menu, X } from 'lucide-react';
+import { LayoutDashboard, LogOut, KeyRound, ScrollText, Gift, Menu, X, ShieldCheck } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -42,6 +42,7 @@ export default function Navbar() {
             <>
               <NavLink to="/admin" icon={KeyRound} label="Keys" testId="nav-admin-link" inactiveClass="text-primary/70 hover:text-primary" />
               <NavLink to="/admin/logs" icon={ScrollText} label="Logs" testId="nav-logs-link" inactiveClass="text-green-400/70 hover:text-green-400" />
+              <NavLink to="/admin/cookies" icon={ShieldCheck} label="My Cookies" testId="nav-admin-cookies-link" inactiveClass="text-purple-400/70 hover:text-purple-400" />
             </>
           )}
           <div className="w-px h-6 bg-white/10 mx-2" />
@@ -71,6 +72,7 @@ export default function Navbar() {
               <>
                 <NavLink to="/admin" icon={KeyRound} label="Keys" testId="nav-admin-link-mobile" inactiveClass="text-primary/70 hover:text-primary" />
                 <NavLink to="/admin/logs" icon={ScrollText} label="Logs" testId="nav-logs-link-mobile" inactiveClass="text-green-400/70 hover:text-green-400" />
+                <NavLink to="/admin/cookies" icon={ShieldCheck} label="My Cookies" testId="nav-admin-cookies-link-mobile" inactiveClass="text-purple-400/70 hover:text-purple-400" />
               </>
             )}
             <div className="border-t border-white/5 pt-2 mt-2 flex items-center justify-between">
