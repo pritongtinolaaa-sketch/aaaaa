@@ -80,7 +80,6 @@ function FilterBar({ cookies, filters, setFilters }) {
         <Filter className="w-3.5 h-3.5" />
         <span className="text-xs font-mono uppercase tracking-wide">Filter</span>
       </div>
-
       <div className="flex items-center gap-1">
         {statuses.map(s => (
           <button
@@ -100,31 +99,24 @@ function FilterBar({ cookies, filters, setFilters }) {
           </button>
         ))}
       </div>
-
       <select
         value={filters.plan}
         onChange={e => setFilters(f => ({ ...f, plan: e.target.value }))}
         className={selectClass}
       >
         {plans.map(p => (
-          <option key={p} value={p} className="bg-[#111]">
-            {p === 'all' ? 'All Plans' : p}
-          </option>
+          <option key={p} value={p} className="bg-[#111]">{p === 'all' ? 'All Plans' : p}</option>
         ))}
       </select>
-
       <select
         value={filters.country}
         onChange={e => setFilters(f => ({ ...f, country: e.target.value }))}
         className={selectClass}
       >
         {countries.map(c => (
-          <option key={c} value={c} className="bg-[#111]">
-            {c === 'all' ? 'All Countries' : c}
-          </option>
+          <option key={c} value={c} className="bg-[#111]">{c === 'all' ? 'All Countries' : c}</option>
         ))}
       </select>
-
       {(filters.status !== 'all' || filters.plan !== 'all' || filters.country !== 'all') && (
         <button
           onClick={() => setFilters({ status: 'all', plan: 'all', country: 'all' })}
@@ -173,24 +165,19 @@ function FreeCookieSmallCard({ cookie, globalIndex, isAdmin, onDelete, onClick }
           </button>
         )}
       </div>
-
       <div className="flex items-center gap-2 mb-1.5">
         <Mail className="w-3.5 h-3.5 text-white/20 shrink-0" />
         <span className="text-white/70 text-xs font-mono truncate">{cookie.email || '—'}</span>
       </div>
-
       <div className="flex items-center gap-2 mb-1.5">
         <CreditCard className="w-3.5 h-3.5 text-white/20 shrink-0" />
         <span className="text-white/40 text-xs">{cookie.plan || '—'}</span>
       </div>
-
       <div className="flex items-center gap-2">
         <Globe className="w-3.5 h-3.5 text-white/20 shrink-0" />
         <span className="text-white/40 text-xs">{cookie.country || '—'}</span>
       </div>
-
-      <div className="mt-3 pt-2 border-t border-white/5 text-[10px] font-mono text-center tracking-widest
-        text-white/15 group-hover:text-green-400 transition-colors duration-200">
+      <div className="mt-3 pt-2 border-t border-white/5 text-[10px] font-mono text-center tracking-widest text-white/15 group-hover:text-green-400 transition-colors duration-200">
         TAP TO USE
       </div>
     </motion.div>
@@ -208,7 +195,6 @@ function FreeCookieModal({ cookie, globalIndex, isAdmin, onClose }) {
   const [showCookie, setShowCookie] = useState(false);
   const [showBrowserCookies, setShowBrowserCookies] = useState(false);
   const { token } = useAuth();
-
   const isAlive = cookie.is_alive !== false;
 
   const handleTvCode = async () => {
@@ -216,10 +202,7 @@ function FreeCookieModal({ cookie, globalIndex, isAdmin, onClose }) {
     setTvLoading(true);
     setTvResult(null);
     try {
-      const res = await axios.post(`${API}/tv-code`, {
-        code: tvCode,
-        cookie_id: cookie.id
-      }, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.post(`${API}/tv-code`, { code: tvCode, cookie_id: cookie.id }, { headers: { Authorization: `Bearer ${token}` } });
       setTvResult(res.data);
       if (res.data.success) toast.success(res.data.message);
       else toast.error(res.data.message);
@@ -233,9 +216,7 @@ function FreeCookieModal({ cookie, globalIndex, isAdmin, onClose }) {
   const handleRefreshToken = async () => {
     setTokenRefreshing(true);
     try {
-      const res = await axios.post(`${API}/free-cookies/${cookie.id}/refresh-token`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.post(`${API}/free-cookies/${cookie.id}/refresh-token`, {}, { headers: { Authorization: `Bearer ${token}` } });
       setCurrentNftoken(res.data.nftoken);
       setCurrentNftokenLink(res.data.nftoken_link);
       setLastRefreshed(new Date().toISOString());
@@ -250,20 +231,13 @@ function FreeCookieModal({ cookie, globalIndex, isAdmin, onClose }) {
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-40 flex items-center justify-center pt-16">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="absolute inset-0 bg-black/75 backdrop-blur-sm"
-        />
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 24 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 12 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className="relative w-[calc(100vw-2rem)] sm:w-[500px] max-h-[85vh] bg-[#0a0a0a] border border-white/10 rounded-2xl z-10 flex flex-col overflow-hidden
-            shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_24px_48px_rgba(0,0,0,0.8)]"
+          className="relative w-[calc(100vw-2rem)] sm:w-[500px] max-h-[85vh] bg-[#0a0a0a] border border-white/10 rounded-2xl z-10 flex flex-col overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_24px_48px_rgba(0,0,0,0.8)]"
         >
           <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
@@ -321,25 +295,13 @@ function FreeCookieModal({ cookie, globalIndex, isAdmin, onClose }) {
                 </div>
                 {currentNftokenLink && (
                   <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                    <a
-                      href={currentNftokenLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      data-testid={`free-nftoken-link-${globalIndex}`}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-all"
-                    >
-                      <Link2 className="w-4 h-4" />
-                      Open Netflix with Token
+                    <a href={currentNftokenLink} target="_blank" rel="noopener noreferrer" data-testid={`free-nftoken-link-${globalIndex}`}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-all">
+                      <Link2 className="w-4 h-4" /> Open Netflix with Token
                     </a>
-                    <a
-                      href={`https://www.netflix.com/unsupported?nftoken=${currentNftoken}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      data-testid={`free-nftoken-unsupported-${globalIndex}`}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-all"
-                    >
-                      <Smartphone className="w-4 h-4" />
-                      Open in Phone
+                    <a href={`https://www.netflix.com/unsupported?nftoken=${currentNftoken}`} target="_blank" rel="noopener noreferrer" data-testid={`free-nftoken-unsupported-${globalIndex}`}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-all">
+                      <Smartphone className="w-4 h-4" /> Open in Phone
                     </a>
                   </div>
                 )}
@@ -382,24 +344,14 @@ function FreeCookieModal({ cookie, globalIndex, isAdmin, onClose }) {
 
             {isAdmin && cookie.browser_cookies && (
               <div className="border-t border-white/5">
-                <button
-                  onClick={() => setShowBrowserCookies(p => !p)}
-                  className="w-full px-5 py-3 flex items-center justify-between text-xs text-green-400/50 hover:text-green-400/80 transition-colors"
-                  data-testid={`free-browser-cookies-expand-${globalIndex}`}
-                >
-                  <span className="font-mono uppercase tracking-wide">
-                    {showBrowserCookies ? 'Hide' : 'View'} Browser Cookies
-                  </span>
+                <button onClick={() => setShowBrowserCookies(p => !p)} className="w-full px-5 py-3 flex items-center justify-between text-xs text-green-400/50 hover:text-green-400/80 transition-colors" data-testid={`free-browser-cookies-expand-${globalIndex}`}>
+                  <span className="font-mono uppercase tracking-wide">{showBrowserCookies ? 'Hide' : 'View'} Browser Cookies</span>
                   <span className={`transition-transform duration-200 inline-block ${showBrowserCookies ? 'rotate-180' : ''}`}>▾</span>
                 </button>
                 {showBrowserCookies && (
                   <div className="relative px-5 pb-4">
-                    <pre className="text-xs font-mono text-green-400/60 bg-black/60 rounded-xl p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
-                      {cookie.browser_cookies}
-                    </pre>
-                    <div className="absolute top-2 right-7">
-                      <CopyBtn text={cookie.browser_cookies} testId={`free-browser-cookies-copy-${globalIndex}`} />
-                    </div>
+                    <pre className="text-xs font-mono text-green-400/60 bg-black/60 rounded-xl p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">{cookie.browser_cookies}</pre>
+                    <div className="absolute top-2 right-7"><CopyBtn text={cookie.browser_cookies} testId={`free-browser-cookies-copy-${globalIndex}`} /></div>
                   </div>
                 )}
               </div>
@@ -407,24 +359,14 @@ function FreeCookieModal({ cookie, globalIndex, isAdmin, onClose }) {
 
             {isAdmin && cookie.full_cookie && (
               <div className="border-t border-white/5">
-                <button
-                  onClick={() => setShowCookie(p => !p)}
-                  className="w-full px-5 py-3 flex items-center justify-between text-xs text-white/30 hover:text-white/50 transition-colors"
-                  data-testid={`free-cookie-expand-${globalIndex}`}
-                >
-                  <span className="font-mono uppercase tracking-wide">
-                    {showCookie ? 'Hide' : 'View'} Original Cookie
-                  </span>
+                <button onClick={() => setShowCookie(p => !p)} className="w-full px-5 py-3 flex items-center justify-between text-xs text-white/30 hover:text-white/50 transition-colors" data-testid={`free-cookie-expand-${globalIndex}`}>
+                  <span className="font-mono uppercase tracking-wide">{showCookie ? 'Hide' : 'View'} Original Cookie</span>
                   <span className={`transition-transform duration-200 inline-block ${showCookie ? 'rotate-180' : ''}`}>▾</span>
                 </button>
                 {showCookie && (
                   <div className="relative px-5 pb-4">
-                    <pre className="text-xs font-mono text-white/40 bg-black/60 rounded-xl p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
-                      {cookie.full_cookie}
-                    </pre>
-                    <div className="absolute top-2 right-7">
-                      <CopyBtn text={cookie.full_cookie} testId={`free-cookie-copy-${globalIndex}`} />
-                    </div>
+                    <pre className="text-xs font-mono text-white/40 bg-black/60 rounded-xl p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">{cookie.full_cookie}</pre>
+                    <div className="absolute top-2 right-7"><CopyBtn text={cookie.full_cookie} testId={`free-cookie-copy-${globalIndex}`} /></div>
                   </div>
                 )}
               </div>
@@ -469,20 +411,14 @@ export default function FreeCookiesPage() {
     setLoading(true);
     try {
       if (isAdmin) {
-        const res = await axios.get(`${API}/admin/free-cookies`, {
-          headers,
-          params: { page: currentPage, page_size: pageSize }
-        });
+        const res = await axios.get(`${API}/admin/free-cookies`, { headers, params: { page: currentPage, page_size: pageSize } });
         setCookies(res.data.cookies);
         setTotalPages(res.data.total_pages);
         setTotal(res.data.total);
         setDisplayLimit(res.data.display_limit);
         setLimitInput(String(res.data.display_limit));
       } else {
-        const res = await axios.get(`${API}/free-cookies`, {
-          headers,
-          params: { page: currentPage, page_size: pageSize }
-        });
+        const res = await axios.get(`${API}/free-cookies`, { headers, params: { page: currentPage, page_size: pageSize } });
         setCookies(res.data.cookies);
         setTotalPages(res.data.total_pages);
         setTotal(res.data.total);
@@ -543,7 +479,6 @@ export default function FreeCookiesPage() {
     });
   }, [cookies, filters]);
 
-  // Global index = position across all pages, not just current page
   const getGlobalIndex = (localIdx) => (page - 1) * pageSize + localIdx;
 
   function Pagination() {
@@ -554,9 +489,6 @@ export default function FreeCookiesPage() {
     }, []); // eslint-disable-line
 
     if (totalPages <= 1) return null;
-
-    const headPages = [1, 2, 3].filter(p => p <= totalPages);
-    const tailPages = [totalPages - 2, totalPages - 1, totalPages].filter(p => p > 3);
 
     const handleJump = (e) => {
       if (e.key === 'Enter') {
@@ -577,6 +509,17 @@ export default function FreeCookiesPage() {
           : 'text-white/30 border-white/10 hover:border-white/20 hover:text-white/60'
       }`;
 
+    const siblings = 2;
+    const rangeStart = Math.max(2, page - siblings);
+    const rangeEnd = Math.min(totalPages - 1, page + siblings);
+    const pages = [];
+
+    pages.push(1);
+    if (rangeStart > 2) pages.push('left-ellipsis');
+    for (let i = rangeStart; i <= rangeEnd; i++) pages.push(i);
+    if (rangeEnd < totalPages - 1) pages.push('right-ellipsis');
+    if (totalPages > 1) pages.push(totalPages);
+
     return (
       <div className="flex items-center justify-center gap-1.5 flex-wrap">
         <button
@@ -587,30 +530,27 @@ export default function FreeCookiesPage() {
           &lt;
         </button>
 
-        {headPages.map(p => (
-          <button key={p} onClick={() => setPage(p)} className={btnClass(p)}>{p}</button>
-        ))}
-
-        {totalPages > 6 && <span className="text-white/20 text-xs font-mono px-1">...</span>}
-
-        {totalPages > 6 && (
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={inputVal}
-            onChange={e => setInputVal(e.target.value.replace(/\D/g, ''))}
-            onKeyDown={handleJump}
-            onBlur={() => setInputVal(String(page))}
-            className="w-14 h-8 rounded-lg text-xs font-mono text-center text-green-400 bg-black/50 border border-green-500/30 focus:border-green-500/60 outline-none transition-all appearance-none"
-          />
-        )}
-
-        {totalPages > 6 && <span className="text-white/20 text-xs font-mono px-1">...</span>}
-
-        {tailPages.map(p => (
-          <button key={p} onClick={() => setPage(p)} className={btnClass(p)}>{p}</button>
-        ))}
+        {pages.map((p, i) => {
+          if (p === 'left-ellipsis' || p === 'right-ellipsis') {
+            return <span key={p} className="text-white/20 text-xs font-mono px-1">...</span>;
+          }
+          if (p === page) {
+            return (
+              <input
+                key="current"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={inputVal}
+                onChange={e => setInputVal(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={handleJump}
+                onBlur={() => setInputVal(String(page))}
+                className="w-14 h-8 rounded-lg text-xs font-mono text-center text-green-400 bg-green-500/20 border border-green-500/40 focus:border-green-500/60 outline-none transition-all appearance-none"
+              />
+            );
+          }
+          return <button key={p} onClick={() => setPage(p)} className={btnClass(p)}>{p}</button>;
+        })}
 
         <button
           onClick={() => setPage(p => Math.min(totalPages, p + 1))}
@@ -656,8 +596,7 @@ export default function FreeCookiesPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-gradient-to-b from-white/10 to-white/[0.03] border border-white/20 rounded-2xl p-6 mb-8
-              shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_8px_24px_rgba(0,0,0,0.6)]"
+            className="bg-gradient-to-b from-white/10 to-white/[0.03] border border-white/20 rounded-2xl p-6 mb-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_8px_24px_rgba(0,0,0,0.6)]"
             data-testid="free-cookies-admin-controls"
           >
             <div className="flex items-center gap-3 mb-4">
@@ -666,42 +605,19 @@ export default function FreeCookiesPage() {
             </div>
             <div className="flex items-end gap-4">
               <div className="w-48">
-                <label className="text-xs text-white/40 uppercase tracking-wide mb-1.5 block">
-                  Max cookies shown to free tier
-                </label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={limitInput}
-                  onChange={e => setLimitInput(e.target.value)}
-                  className="bg-black/50 border-white/10 focus:border-primary text-white h-10 rounded-xl"
-                  data-testid="free-cookies-limit-input"
-                />
+                <label className="text-xs text-white/40 uppercase tracking-wide mb-1.5 block">Max cookies shown to free tier</label>
+                <Input type="number" min={1} value={limitInput} onChange={e => setLimitInput(e.target.value)} className="bg-black/50 border-white/10 focus:border-primary text-white h-10 rounded-xl" data-testid="free-cookies-limit-input" />
               </div>
-              <Button
-                onClick={updateLimit}
-                disabled={savingLimit}
-                data-testid="save-limit-btn"
-                className="bg-primary hover:bg-red-700 text-white font-bebas tracking-widest uppercase rounded-xl h-10 px-6"
-              >
+              <Button onClick={updateLimit} disabled={savingLimit} data-testid="save-limit-btn" className="bg-primary hover:bg-red-700 text-white font-bebas tracking-widest uppercase rounded-xl h-10 px-6">
                 {savingLimit ? <Loader2 className="w-4 h-4 animate-spin" /> : 'SAVE'}
               </Button>
               <div className="ml-auto">
-                <Badge className="bg-white/5 text-white/40 border border-white/10 text-xs">
-                  {total} total / {displayLimit} shown to free tier
-                </Badge>
+                <Badge className="bg-white/5 text-white/40 border border-white/10 text-xs">{total} total / {displayLimit} shown to free tier</Badge>
               </div>
             </div>
-            <p className="text-xs text-white/20 mt-3">
-              Free tier users see up to this many cookies. Premium users always see up to 500. Master sees all.
-            </p>
+            <p className="text-xs text-white/20 mt-3">Free tier users see up to this many cookies. Premium users always see up to 500. Master sees all.</p>
             <div className="mt-4 pt-4 border-t border-white/5 flex items-center gap-4">
-              <Button
-                onClick={refreshTokens}
-                disabled={refreshing || total === 0}
-                data-testid="refresh-tokens-btn"
-                className="bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 font-bebas tracking-widest uppercase rounded-xl h-10 px-6"
-              >
+              <Button onClick={refreshTokens} disabled={refreshing || total === 0} data-testid="refresh-tokens-btn" className="bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 font-bebas tracking-widest uppercase rounded-xl h-10 px-6">
                 {refreshing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                 REFRESH TOKENS NOW
               </Button>
@@ -723,17 +639,13 @@ export default function FreeCookiesPage() {
           </div>
         ) : (
           <>
-            {/* Centered filter bar */}
             <FilterBar cookies={cookies} filters={filters} setFilters={setFilters} />
 
             {filteredCookies.length === 0 ? (
               <div className="text-center py-16 text-white/30">
                 <Filter className="w-10 h-10 mx-auto mb-3 text-white/10" />
                 <p>No cookies match your filters</p>
-                <button
-                  onClick={() => setFilters({ status: 'all', plan: 'all', country: 'all' })}
-                  className="mt-2 text-xs text-white/20 hover:text-green-400 transition-colors font-mono"
-                >
+                <button onClick={() => setFilters({ status: 'all', plan: 'all', country: 'all' })} className="mt-2 text-xs text-white/20 hover:text-green-400 transition-colors font-mono">
                   Reset filters
                 </button>
               </div>
@@ -755,7 +667,6 @@ export default function FreeCookiesPage() {
               </div>
             )}
 
-            {/* Bottom pagination only */}
             <div className="mt-8">
               <Pagination />
             </div>
