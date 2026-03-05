@@ -71,7 +71,7 @@ export default function Navbar() {
           <div className="w-px h-6 bg-white/10 mx-2" />
 
           {/* Username + badge */}
-          <div className="flex flex-col items-end mr-2">
+          <div className="flex flex-col items-center mr-2">
             <span className="text-sm text-white/40 leading-tight" data-testid="nav-username">{user.label}</span>
             <TierBadge />
           </div>
