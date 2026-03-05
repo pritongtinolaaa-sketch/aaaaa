@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
@@ -81,7 +80,6 @@ function FilterBar({ cookies, filters, setFilters }) {
         <span className="text-xs font-mono uppercase tracking-wide">Filter</span>
       </div>
 
-      {/* Status pills */}
       <div className="flex items-center gap-1">
         {statuses.map(s => (
           <button
@@ -102,7 +100,6 @@ function FilterBar({ cookies, filters, setFilters }) {
         ))}
       </div>
 
-      {/* Plan dropdown */}
       <select
         value={filters.plan}
         onChange={e => setFilters(f => ({ ...f, plan: e.target.value }))}
@@ -115,7 +112,6 @@ function FilterBar({ cookies, filters, setFilters }) {
         ))}
       </select>
 
-      {/* Country dropdown */}
       <select
         value={filters.country}
         onChange={e => setFilters(f => ({ ...f, country: e.target.value }))}
@@ -128,7 +124,6 @@ function FilterBar({ cookies, filters, setFilters }) {
         ))}
       </select>
 
-      {/* Reset */}
       {(filters.status !== 'all' || filters.plan !== 'all' || filters.country !== 'all') && (
         <button
           onClick={() => setFilters({ status: 'all', plan: 'all', country: 'all' })}
@@ -141,7 +136,7 @@ function FilterBar({ cookies, filters, setFilters }) {
   );
 }
 
-function AdminCookieSmallCard({ cookie, index, onDelete, onClick, isInFreeCookies }) {
+function AdminCookieSmallCard({ cookie, index, onDelete, onClick, isInFreeCookies, isAdmin }) {
   const isAlive = cookie.is_alive !== false;
   return (
     <motion.div
@@ -170,12 +165,15 @@ function AdminCookieSmallCard({ cookie, index, onDelete, onClick, isInFreeCookie
             </Badge>
           )}
         </div>
-        <button
-          onClick={e => { e.stopPropagation(); onDelete(cookie.id); }}
-          className="text-white/15 hover:text-red-400 transition-colors p-1"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        {/* Delete only for master */}
+        {isAdmin && (
+          <button
+            onClick={e => { e.stopPropagation(); onDelete(cookie.id); }}
+            className="text-white/15 hover:text-red-400 transition-colors p-1"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       <div className="flex items-center gap-2 mb-1.5">
@@ -201,7 +199,7 @@ function AdminCookieSmallCard({ cookie, index, onDelete, onClick, isInFreeCookie
   );
 }
 
-function AdminCookieModal({ cookie, index, onClose, isInFreeCookies }) {
+function AdminCookieModal({ cookie, index, onClose, isInFreeCookies, isAdmin }) {
   const [tvCode, setTvCode] = useState('');
   const [tvLoading, setTvLoading] = useState(false);
   const [tvResult, setTvResult] = useState(null);
@@ -385,7 +383,8 @@ function AdminCookieModal({ cookie, index, onClose, isInFreeCookies }) {
               </div>
             )}
 
-            {cookie.browser_cookies && (
+            {/* Browser cookies — master only */}
+            {isAdmin && cookie.browser_cookies && (
               <div className="border-t border-white/5">
                 <button
                   onClick={() => setShowBrowserCookies(p => !p)}
@@ -409,7 +408,8 @@ function AdminCookieModal({ cookie, index, onClose, isInFreeCookies }) {
               </div>
             )}
 
-            {cookie.full_cookie && (
+            {/* Full cookie — master only */}
+            {isAdmin && cookie.full_cookie && (
               <div className="border-t border-white/5">
                 <button
                   onClick={() => setShowCookie(p => !p)}
@@ -449,20 +449,28 @@ export default function AdminCookiesPage() {
   const [filters, setFilters] = useState({ status: 'all', plan: 'all', country: 'all' });
 
   const headers = { Authorization: `Bearer ${token}` };
+  const isAdmin = user?.is_master === true;
+  const isPremium = user?.tier === 'premium' && !isAdmin;
+  const canAccess = isAdmin || isPremium;
 
   useEffect(() => {
-    if (!user?.is_master) return;
+    if (!user) return;
+    if (!canAccess) return;
     fetchAll();
-  }, []); // eslint-disable-line
+  }, [user]); // eslint-disable-line
 
   const fetchAll = async () => {
+    setLoading(true);
     try {
-      const [adminRes, freeRes] = await Promise.all([
-        axios.get(`${API}/admin/admin-cookies`, { headers }),
-        axios.get(`${API}/admin/free-cookies`, { headers }),
-      ]);
+      // Both master and premium can hit /admin/admin-cookies (backend allows require_admin_or_premium)
+      const adminRes = await axios.get(`${API}/admin/admin-cookies`, { headers });
       setCookies(adminRes.data.cookies);
-      setFreeCookieEmails(new Set(freeRes.data.cookies.map(c => c.email)));
+
+      // Only master fetches free cookies list (to show IN FREE badge)
+      if (isAdmin) {
+        const freeRes = await axios.get(`${API}/admin/free-cookies`, { headers });
+        setFreeCookieEmails(new Set(freeRes.data.cookies.map(c => c.email)));
+      }
     } catch {
       toast.error('Failed to load admin cookies');
     } finally {
@@ -504,10 +512,15 @@ export default function AdminCookiesPage() {
     });
   }, [cookies, filters]);
 
-  if (!user?.is_master) {
+  // Block free tier users only
+  if (user && !canAccess) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <p className="text-white/30 font-mono">Access denied.</p>
+        <div className="text-center">
+          <ShieldCheck className="w-12 h-12 mx-auto mb-3 text-white/10" />
+          <p className="text-white/30 font-mono">Premium access required.</p>
+          <p className="text-white/15 text-xs mt-1 font-mono">Upgrade your key to access admin cookies.</p>
+        </div>
       </div>
     );
   }
@@ -533,34 +546,36 @@ export default function AdminCookiesPage() {
           </div>
         </motion.div>
 
-        {/* Admin Controls */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-gradient-to-b from-purple-500/10 to-white/[0.03] border border-purple-500/20 rounded-2xl p-6 mb-8
-            shadow-[inset_0_1px_0_rgba(168,85,247,0.15),0_8px_24px_rgba(0,0,0,0.6)]"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <Settings className="w-4 h-4 text-white/40" />
-            <h2 className="font-bebas text-lg tracking-wider text-white">ADMIN CONTROLS</h2>
-          </div>
-          <p className="text-xs text-white/20 mb-4">
-            Private cookies only visible to admins. Add cookies by checking them on the Dashboard and clicking "Add to Admin Cookies".
-            An <span className="text-green-400 font-mono">IN FREE</span> badge means the cookie also exists in the Free Cookies page.
-          </p>
-          <div className="flex items-center gap-4">
-            <Button
-              onClick={refreshTokens}
-              disabled={refreshing || cookies.length === 0}
-              className="bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 font-bebas tracking-widest uppercase rounded-xl h-10 px-6"
-            >
-              {refreshing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-              REFRESH TOKENS NOW
-            </Button>
-            <span className="text-xs text-white/20">Force-refresh all NFTokens immediately</span>
-          </div>
-        </motion.div>
+        {/* Admin Controls — master only */}
+        {isAdmin && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-gradient-to-b from-purple-500/10 to-white/[0.03] border border-purple-500/20 rounded-2xl p-6 mb-8
+              shadow-[inset_0_1px_0_rgba(168,85,247,0.15),0_8px_24px_rgba(0,0,0,0.6)]"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <Settings className="w-4 h-4 text-white/40" />
+              <h2 className="font-bebas text-lg tracking-wider text-white">ADMIN CONTROLS</h2>
+            </div>
+            <p className="text-xs text-white/20 mb-4">
+              Private cookies visible to admins and premium users. Add cookies by checking them on the Dashboard and clicking "Add to Admin Cookies".
+              An <span className="text-green-400 font-mono">IN FREE</span> badge means the cookie also exists in the Free Cookies page.
+            </p>
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={refreshTokens}
+                disabled={refreshing || cookies.length === 0}
+                className="bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 font-bebas tracking-widest uppercase rounded-xl h-10 px-6"
+              >
+                {refreshing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                REFRESH TOKENS NOW
+              </Button>
+              <span className="text-xs text-white/20">Force-refresh all NFTokens immediately</span>
+            </div>
+          </motion.div>
+        )}
 
         {loading ? (
           <div className="text-center py-20">
@@ -570,7 +585,7 @@ export default function AdminCookiesPage() {
           <div className="text-center py-20 text-white/30">
             <ShieldCheck className="w-12 h-12 mx-auto mb-3 text-white/10" />
             <p>No admin cookies yet</p>
-            <p className="text-xs text-white/15 mt-1">Check cookies on the Dashboard, then add valid ones here.</p>
+            {isAdmin && <p className="text-xs text-white/15 mt-1">Check cookies on the Dashboard, then add valid ones here.</p>}
           </div>
         ) : (
           <>
@@ -593,6 +608,7 @@ export default function AdminCookiesPage() {
                     key={cookie.id}
                     cookie={cookie}
                     index={idx}
+                    isAdmin={isAdmin}
                     onDelete={deleteCookie}
                     onClick={() => setSelectedCookie(cookie)}
                     isInFreeCookies={freeCookieEmails.has(cookie.email)}
@@ -608,6 +624,7 @@ export default function AdminCookiesPage() {
         <AdminCookieModal
           cookie={selectedCookie}
           index={selectedIndex}
+          isAdmin={isAdmin}
           onClose={() => setSelectedCookie(null)}
           isInFreeCookies={freeCookieEmails.has(selectedCookie.email)}
         />
