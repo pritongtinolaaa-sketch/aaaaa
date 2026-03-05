@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
   ShieldCheck, Trash2, Copy, Check, Loader2, Mail, CreditCard, Globe, Calendar,
-  Clock, Users, Key, Link2, RefreshCw, Tv, Monitor, Smartphone, X, Settings
+  Clock, Users, Key, Link2, RefreshCw, Tv, Monitor, Smartphone, X, Settings, Filter
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -46,6 +46,88 @@ function InfoRow({ icon, label, value }) {
       <span className="text-white/20">{icon}</span>
       <span className="text-white/40 text-xs uppercase tracking-wide w-24 shrink-0">{label}</span>
       <span className="text-white/90 text-sm font-medium truncate">{value}</span>
+    </div>
+  );
+}
+
+function FilterBar({ cookies, filters, setFilters }) {
+  const statuses = ['all', 'alive', 'dead'];
+
+  const plans = useMemo(() => {
+    const set = new Set(cookies.map(c => c.plan).filter(Boolean));
+    return ['all', ...Array.from(set).sort()];
+  }, [cookies]);
+
+  const countries = useMemo(() => {
+    const set = new Set(cookies.map(c => c.country).filter(Boolean));
+    return ['all', ...Array.from(set).sort()];
+  }, [cookies]);
+
+  const selectClass = "bg-black/50 border border-white/10 text-white/60 text-xs rounded-lg px-3 h-8 outline-none focus:border-purple-500/40 cursor-pointer hover:border-white/20 transition-colors";
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-6">
+      <div className="flex items-center gap-1.5 text-white/20 mr-1">
+        <Filter className="w-3.5 h-3.5" />
+        <span className="text-xs font-mono uppercase tracking-wide">Filter</span>
+      </div>
+
+      {/* Status pills */}
+      <div className="flex items-center gap-1">
+        {statuses.map(s => (
+          <button
+            key={s}
+            onClick={() => setFilters(f => ({ ...f, status: s }))}
+            className={`px-3 h-8 rounded-lg text-xs font-mono uppercase tracking-wide transition-all border ${
+              filters.status === s
+                ? s === 'alive'
+                  ? 'bg-green-500/20 text-green-400 border-green-500/40'
+                  : s === 'dead'
+                  ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                  : 'bg-purple-500/20 text-purple-400 border-purple-500/40'
+                : 'bg-transparent text-white/25 border-white/8 hover:border-white/15 hover:text-white/40'
+            }`}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {/* Plan dropdown */}
+      <select
+        value={filters.plan}
+        onChange={e => setFilters(f => ({ ...f, plan: e.target.value }))}
+        className={selectClass}
+      >
+        {plans.map(p => (
+          <option key={p} value={p} className="bg-[#111]">
+            {p === 'all' ? 'All Plans' : p}
+          </option>
+        ))}
+      </select>
+
+      {/* Country dropdown */}
+      <select
+        value={filters.country}
+        onChange={e => setFilters(f => ({ ...f, country: e.target.value }))}
+        className={selectClass}
+      >
+        {countries.map(c => (
+          <option key={c} value={c} className="bg-[#111]">
+            {c === 'all' ? 'All Countries' : c}
+          </option>
+        ))}
+      </select>
+
+      {/* Reset */}
+      {(filters.status !== 'all' || filters.plan !== 'all' || filters.country !== 'all') && (
+        <button
+          onClick={() => setFilters({ status: 'all', plan: 'all', country: 'all' })}
+          className="px-3 h-8 rounded-lg text-xs font-mono uppercase tracking-wide text-white/25 border border-white/8 hover:text-red-400 hover:border-red-500/30 transition-all"
+        >
+          Reset
+        </button>
+      )}
     </div>
   );
 }
@@ -355,6 +437,7 @@ export default function AdminCookiesPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCookie, setSelectedCookie] = useState(null);
+  const [filters, setFilters] = useState({ status: 'all', plan: 'all', country: 'all' });
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -402,6 +485,16 @@ export default function AdminCookiesPage() {
     }
   };
 
+  const filteredCookies = useMemo(() => {
+    return cookies.filter(c => {
+      if (filters.status === 'alive' && c.is_alive === false) return false;
+      if (filters.status === 'dead' && c.is_alive !== false) return false;
+      if (filters.plan !== 'all' && c.plan !== filters.plan) return false;
+      if (filters.country !== 'all' && c.country !== filters.country) return false;
+      return true;
+    });
+  }, [cookies, filters]);
+
   if (!user?.is_master) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
@@ -425,7 +518,7 @@ export default function AdminCookiesPage() {
             </div>
             {!loading && cookies.length > 0 && (
               <span className="font-bebas text-lg tracking-widest text-purple-400">
-                {cookies.length} COOKIES
+                {filteredCookies.length}/{cookies.length} COOKIES
               </span>
             )}
           </div>
@@ -445,7 +538,7 @@ export default function AdminCookiesPage() {
           </div>
           <p className="text-xs text-white/20 mb-4">
             Private cookies only visible to admins. Add cookies by checking them on the Dashboard and clicking "Add to Admin Cookies".
-            An  <span className="text-green-400 font-mono">IN FREE</span>   badge means the cookie also exists in the Free Cookies page.
+            An <span className="text-green-400 font-mono">IN FREE</span> badge means the cookie also exists in the Free Cookies page.
           </p>
           <div className="flex items-center gap-4">
             <Button
@@ -471,18 +564,34 @@ export default function AdminCookiesPage() {
             <p className="text-xs text-white/15 mt-1">Check cookies on the Dashboard, then add valid ones here.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {cookies.map((cookie, idx) => (
-              <AdminCookieSmallCard
-                key={cookie.id}
-                cookie={cookie}
-                index={idx}
-                onDelete={deleteCookie}
-                onClick={() => setSelectedCookie(cookie)}
-                isInFreeCookies={freeCookieEmails.has(cookie.email)}
-              />
-            ))}
-          </div>
+          <>
+            <FilterBar cookies={cookies} filters={filters} setFilters={setFilters} />
+            {filteredCookies.length === 0 ? (
+              <div className="text-center py-16 text-white/30">
+                <Filter className="w-10 h-10 mx-auto mb-3 text-white/10" />
+                <p>No cookies match your filters</p>
+                <button
+                  onClick={() => setFilters({ status: 'all', plan: 'all', country: 'all' })}
+                  className="mt-2 text-xs text-white/20 hover:text-purple-400 transition-colors font-mono"
+                >
+                  Reset filters
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredCookies.map((cookie, idx) => (
+                  <AdminCookieSmallCard
+                    key={cookie.id}
+                    cookie={cookie}
+                    index={idx}
+                    onDelete={deleteCookie}
+                    onClick={() => setSelectedCookie(cookie)}
+                    isInFreeCookies={freeCookieEmails.has(cookie.email)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
