@@ -524,21 +524,14 @@ export default function FreeCookiesPage() {
   };
 
   const filteredCookies = useMemo(() => {
-    let list = cookies.filter(c => {
+    return cookies.filter(c => {
       if (filters.status === 'alive' && c.is_alive === false) return false;
       if (filters.status === 'dead' && c.is_alive !== false) return false;
       if (filters.plan !== 'all' && c.plan !== filters.plan) return false;
       if (filters.country !== 'all' && c.country !== filters.country) return false;
       return true;
     });
-
-    // Free tier sees cookies from the bottom (oldest first)
-    if (!isAdmin && !isPremium) {
-      list = [...list].reverse();
-    }
-
-    return list;
-  }, [cookies, filters, isAdmin, isPremium]);
+  }, [cookies, filters]);
 
   const selectedIndex = selectedCookie ? cookies.findIndex(c => c.id === selectedCookie.id) : -1;
 
