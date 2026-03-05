@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LayoutDashboard, LogOut, KeyRound, ScrollText, Gift, Menu, X, ShieldCheck } from 'lucide-react';
 
 export default function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, isMaster, isPremium } = useAuth();
   const location = useLocation();
   const [open, setOpen] = useState(false);
 
@@ -38,13 +38,20 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-1">
           <NavLink to="/" icon={LayoutDashboard} label="Dashboard" testId="nav-dashboard-link" />
           <NavLink to="/free-cookies" icon={Gift} label="Free Cookies" testId="nav-free-cookies-link" inactiveClass="text-green-400/70 hover:text-green-400" />
-          {user?.is_master && (
+
+          {/* Premium + Master: Admin Cookies */}
+          {(isMaster || isPremium) && (
+            <NavLink to="/admin/cookies" icon={ShieldCheck} label="Admin Cookies" testId="nav-admin-cookies-link" inactiveClass="text-purple-400/70 hover:text-purple-400" />
+          )}
+
+          {/* Master only */}
+          {isMaster && (
             <>
               <NavLink to="/admin" icon={KeyRound} label="Keys" testId="nav-admin-link" inactiveClass="text-primary/70 hover:text-primary" />
-              <NavLink to="/admin/logs" icon={ScrollText} label="Logs" testId="nav-logs-link" inactiveClass="text-green-400/70 hover:text-green-400" />
-              <NavLink to="/admin/cookies" icon={ShieldCheck} label="My Cookies" testId="nav-admin-cookies-link" inactiveClass="text-purple-400/70 hover:text-purple-400" />
+              <NavLink to="/admin/logs" icon={ScrollText} label="Logs" testId="nav-logs-link" inactiveClass="text-white/50 hover:text-white" />
             </>
           )}
+
           <div className="w-px h-6 bg-white/10 mx-2" />
           <span className="text-sm text-white/40 mr-2" data-testid="nav-username">{user.label}</span>
           <button onClick={logout} data-testid="nav-logout-btn" className="flex items-center gap-2 px-3 py-2 rounded-sm text-sm text-white/40 hover:text-red-400 hover:bg-white/5 transition-colors">
@@ -68,13 +75,20 @@ export default function Navbar() {
           <div className="px-4 py-3 space-y-1">
             <NavLink to="/" icon={LayoutDashboard} label="Dashboard" testId="nav-dashboard-link-mobile" />
             <NavLink to="/free-cookies" icon={Gift} label="Free Cookies" testId="nav-free-cookies-link-mobile" inactiveClass="text-green-400/70 hover:text-green-400" />
-            {user?.is_master && (
+
+            {/* Premium + Master: Admin Cookies */}
+            {(isMaster || isPremium) && (
+              <NavLink to="/admin/cookies" icon={ShieldCheck} label="Admin Cookies" testId="nav-admin-cookies-link-mobile" inactiveClass="text-purple-400/70 hover:text-purple-400" />
+            )}
+
+            {/* Master only */}
+            {isMaster && (
               <>
                 <NavLink to="/admin" icon={KeyRound} label="Keys" testId="nav-admin-link-mobile" inactiveClass="text-primary/70 hover:text-primary" />
-                <NavLink to="/admin/logs" icon={ScrollText} label="Logs" testId="nav-logs-link-mobile" inactiveClass="text-green-400/70 hover:text-green-400" />
-                <NavLink to="/admin/cookies" icon={ShieldCheck} label="My Cookies" testId="nav-admin-cookies-link-mobile" inactiveClass="text-purple-400/70 hover:text-purple-400" />
+                <NavLink to="/admin/logs" icon={ScrollText} label="Logs" testId="nav-logs-link-mobile" inactiveClass="text-white/50 hover:text-white" />
               </>
             )}
+
             <div className="border-t border-white/5 pt-2 mt-2 flex items-center justify-between">
               <span className="text-sm text-white/40" data-testid="nav-username-mobile">{user.label}</span>
               <button onClick={() => { logout(); setOpen(false); }} data-testid="nav-logout-btn-mobile" className="flex items-center gap-2 px-3 py-2 rounded-sm text-sm text-red-400/60 hover:text-red-400 hover:bg-white/5 transition-colors">
