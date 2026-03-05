@@ -147,24 +147,27 @@ function FreeCookieSmallCard({ cookie, globalIndex, isAdmin, onDelete, onClick }
         hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(0,0,0,0.5),0_12px_32px_rgba(0,0,0,0.7)]
         active:scale-[0.97]`}
     >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full shrink-0 ${isAlive ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.5)]' : 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.5)]'}`} />
-          <span className="font-mono text-xs text-white/30">#{globalIndex + 1}</span>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full shrink-0 ${isAlive ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.5)]' : 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.5)]'}`} />
+            <span className="font-mono text-xs text-white/30">#{globalIndex + 1}</span>
+           </div>
+
           <Badge className={`${isAlive ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'} border text-[10px] font-mono px-1.5 py-0`}>
             {isAlive ? 'ALIVE' : 'DEAD'}
           </Badge>
-        </div>
-        {isAdmin && (
-          <button
+
+          {isAdmin && (
+            <button
             onClick={e => { e.stopPropagation(); onDelete(cookie.id); }}
             className="text-white/15 hover:text-red-400 transition-colors p-1"
             data-testid={`delete-free-cookie-${globalIndex}`}
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+
       <div className="flex items-center gap-2 mb-1.5">
         <Mail className="w-3.5 h-3.5 text-white/20 shrink-0" />
         <span className="text-white/70 text-xs font-mono truncate">{cookie.email || '—'}</span>
