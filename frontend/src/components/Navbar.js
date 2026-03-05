@@ -12,6 +12,24 @@ export default function Navbar() {
 
   const isActive = (path) => location.pathname === path;
 
+  const TierBadge = () => {
+    if (isMaster) return (
+      <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-[0_0_6px_rgba(251,191,36,0.3)]">
+        MASTER
+      </span>
+    );
+    if (isPremium) return (
+      <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-purple-500/20 text-purple-400 border border-purple-500/30">
+        PREMIUM
+      </span>
+    );
+    return (
+      <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-white/10 text-white/40 border border-white/10">
+        FREE
+      </span>
+    );
+  };
+
   const NavLink = ({ to, icon: Icon, label, testId, activeClass, inactiveClass }) => (
     <Link
       to={to}
@@ -39,12 +57,10 @@ export default function Navbar() {
           <NavLink to="/" icon={LayoutDashboard} label="Dashboard" testId="nav-dashboard-link" />
           <NavLink to="/free-cookies" icon={Gift} label="Free Cookies" testId="nav-free-cookies-link" inactiveClass="text-green-400/70 hover:text-green-400" />
 
-          {/* Premium + Master: Admin Cookies */}
           {(isMaster || isPremium) && (
             <NavLink to="/admin/cookies" icon={ShieldCheck} label="Admin Cookies" testId="nav-admin-cookies-link" inactiveClass="text-purple-400/70 hover:text-purple-400" />
           )}
 
-          {/* Master only */}
           {isMaster && (
             <>
               <NavLink to="/admin" icon={KeyRound} label="Keys" testId="nav-admin-link" inactiveClass="text-primary/70 hover:text-primary" />
@@ -53,7 +69,13 @@ export default function Navbar() {
           )}
 
           <div className="w-px h-6 bg-white/10 mx-2" />
-          <span className="text-sm text-white/40 mr-2" data-testid="nav-username">{user.label}</span>
+
+          {/* Username + badge */}
+          <div className="flex flex-col items-end mr-2">
+            <span className="text-sm text-white/40 leading-tight" data-testid="nav-username">{user.label}</span>
+            <TierBadge />
+          </div>
+
           <button onClick={logout} data-testid="nav-logout-btn" className="flex items-center gap-2 px-3 py-2 rounded-sm text-sm text-white/40 hover:text-red-400 hover:bg-white/5 transition-colors">
             <LogOut className="w-4 h-4" />
           </button>
@@ -76,12 +98,10 @@ export default function Navbar() {
             <NavLink to="/" icon={LayoutDashboard} label="Dashboard" testId="nav-dashboard-link-mobile" />
             <NavLink to="/free-cookies" icon={Gift} label="Free Cookies" testId="nav-free-cookies-link-mobile" inactiveClass="text-green-400/70 hover:text-green-400" />
 
-            {/* Premium + Master: Admin Cookies */}
             {(isMaster || isPremium) && (
               <NavLink to="/admin/cookies" icon={ShieldCheck} label="Admin Cookies" testId="nav-admin-cookies-link-mobile" inactiveClass="text-purple-400/70 hover:text-purple-400" />
             )}
 
-            {/* Master only */}
             {isMaster && (
               <>
                 <NavLink to="/admin" icon={KeyRound} label="Keys" testId="nav-admin-link-mobile" inactiveClass="text-primary/70 hover:text-primary" />
@@ -90,7 +110,11 @@ export default function Navbar() {
             )}
 
             <div className="border-t border-white/5 pt-2 mt-2 flex items-center justify-between">
-              <span className="text-sm text-white/40" data-testid="nav-username-mobile">{user.label}</span>
+              {/* Username + badge for mobile */}
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm text-white/40 leading-tight" data-testid="nav-username-mobile">{user.label}</span>
+                <TierBadge />
+              </div>
               <button onClick={() => { logout(); setOpen(false); }} data-testid="nav-logout-btn-mobile" className="flex items-center gap-2 px-3 py-2 rounded-sm text-sm text-red-400/60 hover:text-red-400 hover:bg-white/5 transition-colors">
                 <LogOut className="w-4 h-4" />
                 Logout
