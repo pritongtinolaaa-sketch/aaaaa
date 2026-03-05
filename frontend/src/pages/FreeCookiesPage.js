@@ -449,19 +449,19 @@ export default function FreeCookiesPage() {
 
   const headers = { Authorization: `Bearer ${token}` };
 
-  // master = full admin controls (delete, limit, refresh)
-  // premium = sees all cookies but no admin controls
-  // free = sees limited cookies, no controls
   const isAdmin = user?.is_master === true;
   const isPremium = user?.tier === 'premium' && !isAdmin;
-  const canSeeAllCookies = isAdmin || isPremium;
 
   useEffect(() => {
-    if (canSeeAllCookies) fetchAdminCookies();
+    if (!user) return;
+    // master → hits /admin/free-cookies (gets all cookies + display_limit setting)
+    // premium + free → hits /free-cookies (backend returns 500 for premium, base_limit for free)
+    if (isAdmin) fetchAdminCookies();
     else fetchUserCookies();
   }, [user]); // eslint-disable-line
 
   const fetchAdminCookies = async () => {
+    setLoading(true);
     try {
       const res = await axios.get(`${API}/admin/free-cookies`, { headers });
       setCookies(res.data.cookies);
@@ -475,6 +475,7 @@ export default function FreeCookiesPage() {
   };
 
   const fetchUserCookies = async () => {
+    setLoading(true);
     try {
       const res = await axios.get(`${API}/free-cookies`, { headers });
       setCookies(res.data);
@@ -571,7 +572,9 @@ export default function FreeCookiesPage() {
             </div>
             <div className="flex items-end gap-4">
               <div className="w-48">
-                <label className="text-xs text-white/40 uppercase tracking-wide mb-1.5 block">Max cookies shown to users</label>
+                <label className="text-xs text-white/40 uppercase tracking-wide mb-1.5 block">
+                  Max cookies shown to free tier
+                </label>
                 <Input
                   type="number"
                   min={1}
@@ -591,13 +594,12 @@ export default function FreeCookiesPage() {
               </Button>
               <div className="ml-auto">
                 <Badge className="bg-white/5 text-white/40 border border-white/10 text-xs">
-                  {cookies.length} total / {displayLimit} shown to users
+                  {cookies.length} total / {displayLimit} shown to free tier
                 </Badge>
               </div>
             </div>
             <p className="text-xs text-white/20 mt-3">
-              Add free cookies by checking them on the Dashboard first, then clicking "Add to Free Cookies" on valid results.
-              Tokens auto-refresh every 10 minutes and checks if cookies are still alive.
+              Free tier users see up to this many cookies. Premium users always see up to 500. Master sees all.
             </p>
             <div className="mt-4 pt-4 border-t border-white/5 flex items-center gap-4">
               <Button
@@ -622,7 +624,7 @@ export default function FreeCookiesPage() {
           <div className="text-center py-20 text-white/30">
             <Gift className="w-12 h-12 mx-auto mb-3 text-white/10" />
             <p>No free cookies available</p>
-            {!isAdmin && <p className="text-xs text-white/15 mt-1">Check back later — the admin will add some!</p>}
+            {!isAdmin && !isPremium && <p className="text-xs text-white/15 mt-1">Check back later — the admin will add some!</p>}
             {isAdmin && <p className="text-xs text-white/15 mt-1">Check cookies on the Dashboard, then add valid ones here.</p>}
           </div>
         ) : (
