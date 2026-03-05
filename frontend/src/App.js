@@ -23,6 +23,34 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+function MasterRoute({ children }) {
+  const { user, loading, isMaster } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#050505]">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!isMaster) return <Navigate to="/" replace />;
+  return children;
+}
+
+function AdminCookiesRoute({ children }) {
+  const { user, loading, isMaster, isPremium } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#050505]">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!isMaster && !isPremium) return <Navigate to="/" replace />;
+  return children;
+}
+
 function AuthRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) {
@@ -43,9 +71,9 @@ function AppLayout() {
       <main className="pt-16">
         <Routes>
           <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-          <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
-          <Route path="/admin/logs" element={<ProtectedRoute><AdminLogsPage /></ProtectedRoute>} />
-          <Route path="/admin/cookies" element={<ProtectedRoute><AdminCookiesPage /></ProtectedRoute>} />
+          <Route path="/admin" element={<MasterRoute><AdminPage /></MasterRoute>} />
+          <Route path="/admin/logs" element={<MasterRoute><AdminLogsPage /></MasterRoute>} />
+          <Route path="/admin/cookies" element={<AdminCookiesRoute><AdminCookiesPage /></AdminCookiesRoute>} />
           <Route path="/free-cookies" element={<ProtectedRoute><FreeCookiesPage /></ProtectedRoute>} />
           <Route path="/auth" element={<AuthRoute><AuthPage /></AuthRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
