@@ -42,11 +42,13 @@ class KeyCreate(BaseModel):
     max_devices: int = 1
     custom_key: Optional[str] = None
     expires_at: Optional[str] = None
+    tier: Optional[str] = "free"  # "free" | "premium"
 
 class KeyUpdate(BaseModel):
     label: Optional[str] = None
     max_devices: Optional[int] = None
     expires_at: Optional[str] = None
+    tier: Optional[str] = None
 
 class CookieCheckRequest(BaseModel):
     cookies_text: str
@@ -64,12 +66,25 @@ class FreeCookieAdd(BaseModel):
     nftoken: Optional[str] = None
     nftoken_link: Optional[str] = None
 
+class AdminCookieAdd(BaseModel):
+    email: Optional[str] = None
+    plan: Optional[str] = None
+    country: Optional[str] = None
+    member_since: Optional[str] = None
+    next_billing: Optional[str] = None
+    profiles: List[str] = []
+    browser_cookies: str = ""
+    full_cookie: str = ""
+    nftoken: Optional[str] = None
+    nftoken_link: Optional[str] = None
+
 class FreeCookieLimitUpdate(BaseModel):
     limit: int
 
 class TVCodeRequest(BaseModel):
     code: str
     cookie_id: str
+    cookie_source: Optional[str] = "free"
 
 class NoticeUpdate(BaseModel):
     message: str
@@ -97,6 +112,7 @@ async def get_current_user(authorization: str = Header(None)):
             "id": key_doc["id"],
             "label": key_doc["label"],
             "is_master": key_doc.get("is_master", False),
+            "tier": key_doc.get("tier", "free"),
             "session_id": session_id
         }
     except jwt.ExpiredSignatureError:
@@ -108,6 +124,12 @@ async def require_admin(authorization: str = Header(None)):
     user = await get_current_user(authorization)
     if not user.get("is_master"):
         raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+async def require_admin_or_premium(authorization: str = Header(None)):
+    user = await get_current_user(authorization)
+    if not user.get("is_master") and user.get("tier") != "premium":
+        raise HTTPException(status_code=403, detail="Premium or admin access required")
     return user
 
 # --- Cookie Parsing ---
@@ -599,7 +621,8 @@ async def login(data: KeyLogin):
         "user": {
             "id": key_doc["id"],
             "label": key_doc["label"],
-            "is_master": key_doc.get("is_master", False)
+            "is_master": key_doc.get("is_master", False),
+            "tier": key_doc.get("tier", "free")
         }
     }
 
@@ -613,7 +636,12 @@ async def logout(user: dict = Depends(get_current_user)):
 
 @api_router.get("/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):
-    return {"id": user["id"], "label": user["label"], "is_master": user["is_master"]}
+    return {
+        "id": user["id"],
+        "label": user["label"],
+        "is_master": user["is_master"],
+        "tier": user.get("tier", "free")
+    }
 
 # --- Cookie Check Routes ---
 _check_semaphore = asyncio.Semaphore(5)
@@ -622,7 +650,6 @@ async def check_cookie_with_semaphore(block, format_type, job_id, index, total, 
     async with _check_semaphore:
         result = await check_netflix_cookie(block, format_type)
 
-        # ✅ Check BEFORE pushing to db.checks so is_free_cookie is included in results
         if result["status"] == "valid":
             is_free_cookie = False
             if result.get("email"):
@@ -633,9 +660,17 @@ async def check_cookie_with_semaphore(block, format_type, job_id, index, total, 
                         f"[FREE COOKIE DUPLICATE] Cookie checked by '{user['label']}' "
                         f"is already in free cookies — email: {result['email']}"
                     )
-            result["is_free_cookie"] = is_free_cookie  # ✅ Set BEFORE pushing to db.checks
+            result["is_free_cookie"] = is_free_cookie
+
+            is_admin_cookie = False
+            if result.get("email"):
+                existing_admin = await db.admin_cookies.find_one({"email": result["email"]})
+                if existing_admin:
+                    is_admin_cookie = True
+            result["is_admin_cookie"] = is_admin_cookie
         else:
             result["is_free_cookie"] = False
+            result["is_admin_cookie"] = False
 
         await db.checks.update_one(
             {"id": job_id},
@@ -666,6 +701,7 @@ async def check_cookie_with_semaphore(block, format_type, job_id, index, total, 
                 "nftoken": result.get("nftoken"),
                 "nftoken_link": result.get("nftoken_link"),
                 "is_free_cookie": result["is_free_cookie"],
+                "is_admin_cookie": result["is_admin_cookie"],
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
         return result
@@ -841,7 +877,7 @@ async def set_notice(data: NoticeUpdate, user: dict = Depends(require_admin)):
     )
     return {"message": data.message}
 
-# --- Admin Routes ---
+# --- Admin Key Routes ---
 @api_router.post("/admin/keys")
 async def create_key(data: KeyCreate, user: dict = Depends(require_admin)):
     if data.custom_key and data.custom_key.strip():
@@ -852,6 +888,7 @@ async def create_key(data: KeyCreate, user: dict = Depends(require_admin)):
     else:
         key_value = secrets.token_urlsafe(16)
     key_id = str(uuid.uuid4())
+    tier = data.tier if data.tier in ("free", "premium") else "free"
     await db.access_keys.insert_one({
         "id": key_id,
         "key_value": key_value,
@@ -859,10 +896,11 @@ async def create_key(data: KeyCreate, user: dict = Depends(require_admin)):
         "max_devices": data.max_devices,
         "active_sessions": [],
         "is_master": False,
+        "tier": tier,
         "expires_at": data.expires_at or None,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
-    return {"id": key_id, "key_value": key_value, "label": data.label, "max_devices": data.max_devices, "expires_at": data.expires_at}
+    return {"id": key_id, "key_value": key_value, "label": data.label, "max_devices": data.max_devices, "tier": tier, "expires_at": data.expires_at}
 
 @api_router.get("/admin/keys")
 async def list_keys(user: dict = Depends(require_admin)):
@@ -888,6 +926,8 @@ async def update_key(key_id: str, data: KeyUpdate, user: dict = Depends(require_
         updates["max_devices"] = data.max_devices
     if data.expires_at is not None:
         updates["expires_at"] = data.expires_at if data.expires_at != "" else None
+    if data.tier is not None and data.tier in ("free", "premium"):
+        updates["tier"] = data.tier
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
     await db.access_keys.update_one({"id": key_id}, {"$set": updates})
@@ -976,7 +1016,13 @@ async def set_free_cookies_limit(data: FreeCookieLimitUpdate, user: dict = Depen
 @api_router.get("/free-cookies")
 async def get_free_cookies(user: dict = Depends(get_current_user)):
     setting = await db.settings.find_one({"key": "free_cookies_limit"}, {"_id": 0})
-    limit = setting["value"] if setting else 10
+    base_limit = setting["value"] if setting else 10
+
+    if user.get("is_master") or user.get("tier") == "premium":
+        limit = 500
+    else:
+        limit = base_limit
+
     cookies = await db.free_cookies.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
     if not user.get("is_master"):
         for c in cookies:
@@ -1025,7 +1071,6 @@ async def force_refresh_tokens(user: dict = Depends(require_admin)):
                 dead += 1
         except Exception:
             pass
-
     return {"message": f"Refreshed {refreshed} alive, {dead} dead out of {len(free_cookies)}", "refreshed": refreshed, "dead": dead, "total": len(free_cookies)}
 
 @api_router.post("/free-cookies/{cookie_id}/refresh-token")
@@ -1057,6 +1102,120 @@ async def refresh_single_free_cookie_token(cookie_id: str, user: dict = Depends(
         return {"nftoken": nft, "nftoken_link": f"https://netflix.com?nftoken={nft}"}
     else:
         await db.free_cookies.update_one(
+            {"id": cookie_id},
+            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+        )
+        raise HTTPException(status_code=400, detail=nft_err or "Failed to generate token — cookie may be dead")
+
+# --- Admin Cookies Routes ---
+@api_router.post("/admin/admin-cookies")
+async def add_admin_cookie(data: AdminCookieAdd, user: dict = Depends(require_admin_or_premium)):
+    cookie_id = str(uuid.uuid4())
+    await db.admin_cookies.insert_one({
+        "id": cookie_id,
+        "email": data.email,
+        "plan": data.plan,
+        "country": data.country,
+        "member_since": data.member_since,
+        "next_billing": data.next_billing,
+        "profiles": data.profiles,
+        "browser_cookies": data.browser_cookies,
+        "full_cookie": data.full_cookie,
+        "nftoken": data.nftoken,
+        "nftoken_link": data.nftoken_link,
+        "added_by": user["id"],
+        "is_alive": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    return {"id": cookie_id, "message": "Admin cookie added"}
+
+@api_router.get("/admin/admin-cookies")
+async def get_all_admin_cookies(user: dict = Depends(require_admin_or_premium)):
+    cookies = await db.admin_cookies.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"cookies": cookies, "is_master": user.get("is_master", False)}
+
+@api_router.delete("/admin/admin-cookies/{cookie_id}")
+async def delete_admin_cookie(cookie_id: str, user: dict = Depends(require_admin_or_premium)):
+    if not user.get("is_master"):
+        raise HTTPException(status_code=403, detail="Only master can delete cookies")
+    result = await db.admin_cookies.delete_one({"id": cookie_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Admin cookie not found")
+    return {"message": "Admin cookie deleted"}
+
+@api_router.post("/admin/admin-cookies/refresh")
+async def force_refresh_admin_tokens(user: dict = Depends(require_admin_or_premium)):
+    admin_cookies = await db.admin_cookies.find({}, {"_id": 0}).to_list(500)
+    if not admin_cookies:
+        return {"message": "No admin cookies to refresh", "refreshed": 0, "dead": 0, "total": 0}
+
+    refreshed = 0
+    dead = 0
+    for ac in admin_cookies:
+        try:
+            cookies_dict = None
+            if ac.get("browser_cookies"):
+                cookies_dict = parse_cookie_string_to_dict(ac["browser_cookies"])
+            if (not cookies_dict or not cookies_dict.get("NetflixId")) and ac.get("full_cookie"):
+                cookies_dict = parse_cookies_auto(ac["full_cookie"])
+            if not cookies_dict:
+                await db.admin_cookies.update_one(
+                    {"id": ac["id"]},
+                    {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                )
+                dead += 1
+                continue
+            success, nft, nft_err = await generate_nftoken(cookies_dict)
+            if success and nft:
+                await db.admin_cookies.update_one(
+                    {"id": ac["id"]},
+                    {"$set": {
+                        "nftoken": nft,
+                        "nftoken_link": f"https://netflix.com/?nftoken={nft}",
+                        "is_alive": True,
+                        "last_refreshed": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                refreshed += 1
+            else:
+                await db.admin_cookies.update_one(
+                    {"id": ac["id"]},
+                    {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                )
+                dead += 1
+        except Exception:
+            pass
+    return {"message": f"Refreshed {refreshed} alive, {dead} dead out of {len(admin_cookies)}", "refreshed": refreshed, "dead": dead, "total": len(admin_cookies)}
+
+@api_router.post("/admin/admin-cookies/{cookie_id}/refresh-token")
+async def refresh_single_admin_cookie_token(cookie_id: str, user: dict = Depends(require_admin_or_premium)):
+    ac = await db.admin_cookies.find_one({"id": cookie_id}, {"_id": 0})
+    if not ac:
+        raise HTTPException(status_code=404, detail="Admin cookie not found")
+
+    cookies_dict = None
+    if ac.get("browser_cookies"):
+        cookies_dict = parse_cookie_string_to_dict(ac["browser_cookies"])
+    if not cookies_dict or not cookies_dict.get("NetflixId"):
+        if ac.get("full_cookie"):
+            cookies_dict = parse_cookies_auto(ac["full_cookie"])
+    if not cookies_dict:
+        raise HTTPException(status_code=400, detail="Cookie data is invalid or expired")
+
+    success, nft, nft_err = await generate_nftoken(cookies_dict)
+    if success and nft:
+        await db.admin_cookies.update_one(
+            {"id": cookie_id},
+            {"$set": {
+                "nftoken": nft,
+                "nftoken_link": f"https://netflix.com?nftoken={nft}",
+                "is_alive": True,
+                "last_refreshed": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        return {"nftoken": nft, "nftoken_link": f"https://netflix.com?nftoken={nft}"}
+    else:
+        await db.admin_cookies.update_one(
             {"id": cookie_id},
             {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
         )
@@ -1177,15 +1336,24 @@ async def submit_tv_code(data: TVCodeRequest, user: dict = Depends(get_current_u
     if not data.code.strip():
         raise HTTPException(status_code=400, detail="Enter a TV sign-in code")
 
-    fc = await db.free_cookies.find_one({"id": data.cookie_id}, {"_id": 0})
-    if not fc:
-        raise HTTPException(status_code=404, detail="Cookie not found")
-
     cookies_dict = None
-    if fc.get("browser_cookies"):
-        cookies_dict = parse_cookie_string_to_dict(fc["browser_cookies"])
-    if (not cookies_dict or not cookies_dict.get("NetflixId")) and fc.get("full_cookie"):
-        cookies_dict = parse_cookies_auto(fc["full_cookie"])
+
+    if data.cookie_source == "admin":
+        ac = await db.admin_cookies.find_one({"id": data.cookie_id}, {"_id": 0})
+        if not ac:
+            raise HTTPException(status_code=404, detail="Admin cookie not found")
+        if ac.get("browser_cookies"):
+            cookies_dict = parse_cookie_string_to_dict(ac["browser_cookies"])
+        if (not cookies_dict or not cookies_dict.get("NetflixId")) and ac.get("full_cookie"):
+            cookies_dict = parse_cookies_auto(ac["full_cookie"])
+    else:
+        fc = await db.free_cookies.find_one({"id": data.cookie_id}, {"_id": 0})
+        if not fc:
+            raise HTTPException(status_code=404, detail="Cookie not found")
+        if fc.get("browser_cookies"):
+            cookies_dict = parse_cookie_string_to_dict(fc["browser_cookies"])
+        if (not cookies_dict or not cookies_dict.get("NetflixId")) and fc.get("full_cookie"):
+            cookies_dict = parse_cookies_auto(fc["full_cookie"])
 
     if not cookies_dict:
         raise HTTPException(status_code=400, detail="Cookie data is invalid")
@@ -1369,25 +1537,23 @@ app.add_middleware(
 @app.on_event("startup")
 async def seed_master_key():
     global _refresh_task
-    try:
-        master_key = os.environ['MASTER_KEY']
-        existing = await db.access_keys.find_one({"is_master": True}, {"_id": 0})
-        if not existing:
-            await db.access_keys.insert_one({
-                "id": str(uuid.uuid4()),
-                "key_value": master_key,
-                "label": "Master Key",
-                "max_devices": 999,
-                "active_sessions": [],
-                "is_master": True,
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
-            logger.info("Master key seeded")
-        elif existing["key_value"] != master_key:
-            await db.access_keys.update_one({"is_master": True}, {"$set": {"key_value": master_key}})
-            logger.info("Master key updated")
-    except Exception as e:
-        logger.error(f"Startup MongoDB error: {e}")
+    master_key = os.environ['MASTER_KEY']
+    existing = await db.access_keys.find_one({"is_master": True}, {"_id": 0})
+    if not existing:
+        await db.access_keys.insert_one({
+            "id": str(uuid.uuid4()),
+            "key_value": master_key,
+            "label": "Master Key",
+            "max_devices": 999,
+            "active_sessions": [],
+            "is_master": True,
+            "tier": "master",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        logger.info("Master key seeded")
+    elif existing["key_value"] != master_key:
+        await db.access_keys.update_one({"is_master": True}, {"$set": {"key_value": master_key}})
+        logger.info("Master key updated")
 
     _refresh_task = asyncio.create_task(refresh_free_cookie_tokens())
     logger.info("NFToken auto-refresh task started (every 10 min)")
