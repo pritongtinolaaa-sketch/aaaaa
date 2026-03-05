@@ -55,7 +55,16 @@ function FilterBar({ cookies, filters, setFilters }) {
 
   const plans = useMemo(() => {
     const set = new Set(cookies.map(c => c.plan).filter(Boolean));
-    return ['all', ...Array.from(set).sort()];
+    const order = ['Basic', 'Basic with ads', 'Mobile', 'Standard with ads', 'Standard (HD)', 'Premium (UHD)'];
+    const sorted = Array.from(set).sort((a, b) => {
+      const ai = order.findIndex(o => a.includes(o.split(' ')[0]));
+      const bi = order.findIndex(o => b.includes(o.split(' ')[0]));
+      if (ai === -1 && bi === -1) return a.localeCompare(b);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+    return ['all', ...sorted];
   }, [cookies]);
 
   const countries = useMemo(() => {
