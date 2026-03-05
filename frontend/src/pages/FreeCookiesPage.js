@@ -81,7 +81,6 @@ function FilterBar({ cookies, filters, setFilters }) {
         <span className="text-xs font-mono uppercase tracking-wide">Filter</span>
       </div>
 
-      {/* Status pills */}
       <div className="flex items-center gap-1">
         {statuses.map(s => (
           <button
@@ -102,7 +101,6 @@ function FilterBar({ cookies, filters, setFilters }) {
         ))}
       </div>
 
-      {/* Plan dropdown */}
       <select
         value={filters.plan}
         onChange={e => setFilters(f => ({ ...f, plan: e.target.value }))}
@@ -115,7 +113,6 @@ function FilterBar({ cookies, filters, setFilters }) {
         ))}
       </select>
 
-      {/* Country dropdown */}
       <select
         value={filters.country}
         onChange={e => setFilters(f => ({ ...f, country: e.target.value }))}
@@ -128,7 +125,6 @@ function FilterBar({ cookies, filters, setFilters }) {
         ))}
       </select>
 
-      {/* Reset */}
       {(filters.status !== 'all' || filters.plan !== 'all' || filters.country !== 'all') && (
         <button
           onClick={() => setFilters({ status: 'all', plan: 'all', country: 'all' })}
@@ -452,12 +448,18 @@ export default function FreeCookiesPage() {
   const [filters, setFilters] = useState({ status: 'all', plan: 'all', country: 'all' });
 
   const headers = { Authorization: `Bearer ${token}` };
-  const isAdmin = user?.is_master;
+
+  // master = full admin controls (delete, limit, refresh)
+  // premium = sees all cookies but no admin controls
+  // free = sees limited cookies, no controls
+  const isAdmin = user?.is_master === true;
+  const isPremium = user?.tier === 'premium' && !isAdmin;
+  const canSeeAllCookies = isAdmin || isPremium;
 
   useEffect(() => {
-    if (isAdmin) fetchAdminCookies();
+    if (canSeeAllCookies) fetchAdminCookies();
     else fetchUserCookies();
-  }, [isAdmin]); // eslint-disable-line
+  }, [user]); // eslint-disable-line
 
   const fetchAdminCookies = async () => {
     try {
@@ -553,6 +555,7 @@ export default function FreeCookiesPage() {
           </div>
         </motion.div>
 
+        {/* Display Settings — MASTER ONLY */}
         {isAdmin && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
