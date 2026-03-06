@@ -165,9 +165,25 @@ export default function HomeDashboardPage() {
                     {loading ? '...' : counts.total}
                   </div>
                   {!loading && (
-                    <p className="text-xs text-white/35 mt-1 font-mono">
-                      Free: {counts.free} {canAccessAdmin ? `| Admin: ${counts.admin}` : ''}
-                    </p>
+                    <>
+                      <p className="text-xs text-white/35 mt-1 font-mono">
+                        Free: {counts.free}{canAccessAdmin ? ` | Admin: ${counts.admin}` : ''}
+                      </p>
+
+                      {/* Upgrade nudge — free tier only */}
+                      {!canAccessAdmin && (
+                        <div className="mt-3 pt-3 border-t border-white/10 space-y-1">
+                          <p className="text-xs font-mono text-white/40">
+                            Free tier cookies:{' '}
+                            <span className="text-green-400">{counts.free}</span>
+                          </p>
+                          <p className="text-xs font-mono text-white/40">
+                            Premium cookies:{' '}
+                            <span className="text-purple-400">{counts.free + counts.admin}</span>
+                          </p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
