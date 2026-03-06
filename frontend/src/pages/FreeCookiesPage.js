@@ -746,6 +746,18 @@ export default function FreeCookiesPage() {
     }
   };
 
+  const fetchLimit = async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await axios.get(`${API}/admin/free-cookies/limit`, { headers });
+      if (typeof res.data.limit === 'number') {
+        setDisplayLimit(res.data.limit);
+      }
+    } catch {
+    // ignore; fallback stays 10
+    }
+  };
+
   const handleDeleteFreeCookie = async id => {
     if (!isAdmin) return;
     if (!window.confirm('Delete this free cookie?')) return;
@@ -809,7 +821,9 @@ export default function FreeCookiesPage() {
     if (!token) return;
     fetchCookies(1, filters);
     fetchFavoriteIds();
+    fetchLimit();
   }, [token]); // eslint-disable-line
+
 
   useEffect(() => {
     if (activeTab === 'favorites') {
