@@ -1740,6 +1740,7 @@ async def submit_tv_code(data: TVCodeRequest, user: dict = Depends(get_current_u
 
 # --- NFToken Auto-Refresh ---
 NFTOKEN_REFRESH_INTERVAL = 10 * 60
+ADMIN_NFTOKEN_REFRESH_INTERVAL = 30 * 60
 
 async def refresh_free_cookie_tokens():
     first_run = True
@@ -1793,13 +1794,78 @@ async def refresh_free_cookie_tokens():
                     logger.warning(f"NFToken refresh error for {fc['id']}: {e}")
             logger.info(f"NFToken refresh complete: {refreshed} alive, {dead} dead out of {len(free_cookies)}")
         except asyncio.CancelledError:
-            logger.info("NFToken refresh task cancelled")
+            logger.info("Free NFToken refresh task cancelled")
             break
         except Exception as e:
-            logger.error(f"NFToken refresh task error: {e}")
+            logger.error(f"Free NFToken refresh task error: {e}")
             await asyncio.sleep(60)
 
-_refresh_task = None
+async def refresh_admin_cookie_tokens():
+    first_run = True
+    while True:
+        try:
+            if first_run:
+                # Slightly stagger startup so both loops do not spike together.
+                await asyncio.sleep(20)
+                first_run = False
+            else:
+                await asyncio.sleep(ADMIN_NFTOKEN_REFRESH_INTERVAL)
+
+            admin_cookies = await db.admin_cookies.find({}, {"_id": 0}).to_list(500)
+            if not admin_cookies:
+                continue
+
+            logger.info(f"Admin NFToken refresh: processing {len(admin_cookies)} admin cookies")
+            refreshed = 0
+            dead = 0
+
+            for ac in admin_cookies:
+                try:
+                    cookies_dict = None
+                    if ac.get("browser_cookies"):
+                        cookies_dict = parse_cookie_string_to_dict(ac["browser_cookies"])
+                    if (not cookies_dict or not cookies_dict.get("NetflixId")) and ac.get("full_cookie"):
+                        cookies_dict = parse_cookies_auto(ac["full_cookie"])
+                    if not cookies_dict:
+                        await db.admin_cookies.update_one(
+                            {"id": ac["id"]},
+                            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                        )
+                        dead += 1
+                        continue
+
+                    success, nft, nft_err = await generate_nftoken(cookies_dict)
+                    if success and nft:
+                        await db.admin_cookies.update_one(
+                            {"id": ac["id"]},
+                            {"$set": {
+                                "nftoken": nft,
+                                "nftoken_link": f"https://netflix.com/?nftoken={nft}",
+                                "is_alive": True,
+                                "last_refreshed": datetime.now(timezone.utc).isoformat()
+                            }}
+                        )
+                        refreshed += 1
+                    else:
+                        await db.admin_cookies.update_one(
+                            {"id": ac["id"]},
+                            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                        )
+                        dead += 1
+                        logger.warning(f"Admin NFToken refresh failed for {ac['id']}: {nft_err}")
+                except Exception as e:
+                    logger.warning(f"Admin NFToken refresh error for {ac['id']}: {e}")
+
+            logger.info(f"Admin NFToken refresh complete: {refreshed} alive, {dead} dead out of {len(admin_cookies)}")
+        except asyncio.CancelledError:
+            logger.info("Admin NFToken refresh task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Admin NFToken refresh task error: {e}")
+            await asyncio.sleep(60)
+
+_refresh_free_task = None
+_refresh_admin_task = None
 
 app.include_router(api_router)
 
@@ -1813,7 +1879,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def seed_master_key():
-    global _refresh_task
+    global _refresh_free_task, _refresh_admin_task
     master_key = os.environ['MASTER_KEY']
     existing = await db.access_keys.find_one({"is_master": True}, {"_id": 0})
     if not existing:
@@ -1831,16 +1897,18 @@ async def seed_master_key():
     elif existing["key_value"] != master_key:
         await db.access_keys.update_one({"is_master": True}, {"$set": {"key_value": master_key}})
         logger.info("Master key updated")
-    _refresh_task = asyncio.create_task(refresh_free_cookie_tokens())
-    logger.info("NFToken auto-refresh task started (every 10 min)")
+    _refresh_free_task = asyncio.create_task(refresh_free_cookie_tokens())
+    _refresh_admin_task = asyncio.create_task(refresh_admin_cookie_tokens())
+    logger.info("NFToken auto-refresh tasks started (free: 10 min, admin: 30 min)")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    global _refresh_task
-    if _refresh_task:
-        _refresh_task.cancel()
-        try:
-            await _refresh_task
-        except asyncio.CancelledError:
-            pass
+    global _refresh_free_task, _refresh_admin_task
+    for task in (_refresh_free_task, _refresh_admin_task):
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
     client.close()
