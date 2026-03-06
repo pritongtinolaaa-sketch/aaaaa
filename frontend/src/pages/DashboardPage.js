@@ -12,7 +12,7 @@ import axios from 'axios';
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function DashboardPage() {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const [cookieText, setCookieText] = useState('');
   const [formatType, setFormatType] = useState('auto');
   const [checking, setChecking] = useState(false);
@@ -20,28 +20,10 @@ export default function DashboardPage() {
   const [progress, setProgress] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [noticeText, setNoticeText] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
   const fileInputRef = useRef(null);
   const pollRef = useRef(null);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
-
-  useEffect(() => {
-    axios.get(`${API}/admin/notice`, { headers })
-      .then(res => setNoticeText(res.data.message))
-      .catch(() => {});
-  }, [headers]);
-
-  const handleSaveNotice = async () => {
-    try {
-      await axios.post(`${API}/admin/notice`, { message: noticeText }, { headers });
-      setIsEditing(false);
-      toast.success('Notice saved!');
-    } catch {
-      toast.error('Failed to save notice');
-    }
-  };
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -203,49 +185,15 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="mb-10 flex flex-col sm:flex-row items-start justify-between gap-6"
+            className="mb-10 text-center"
           >
-            {/* Title */}
             <div>
               <h1 className="font-bebas text-4xl sm:text-5xl lg:text-6xl tracking-wider text-white" data-testid="dashboard-title">
                 COOKIE <span className="text-primary">CHECKER</span>
               </h1>
-              <p className="text-white/40 mt-2 text-sm md:text-base max-w-lg">
+              <p className="text-white/40 mt-2 text-sm md:text-base max-w-lg mx-auto">
                 Paste or upload Netflix cookies to validate accounts and extract details.
               </p>
-            </div>
-
-            {/* Admin Notice Board */}
-            <div className="w-full sm:min-w-[260px] sm:max-w-xs rounded-2xl p-4
-              bg-gradient-to-b from-white/10 to-white/[0.03]
-              border border-white/20
-              shadow-[inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(0,0,0,0.4),0_8px_24px_rgba(0,0,0,0.6)]">
-              <div className="flex flex-col items-center mb-2 gap-1">
-                <span className="font-bebas tracking-widest text-primary text-2xl">📌 ADMIN NOTICE</span>
-                {user?.is_master && (
-                  isEditing ? (
-                    <button onClick={handleSaveNotice} className="text-xs text-green-400 hover:text-green-300 font-mono">
-                      SAVE
-                    </button>
-                  ) : (
-                    <button onClick={() => setIsEditing(true)} className="text-xs text-white/30 hover:text-white/60 font-mono">
-                      EDIT
-                    </button>
-                  )
-                )}
-              </div>
-              {isEditing && user?.is_master ? (
-                <textarea
-                  value={noticeText}
-                  onChange={(e) => setNoticeText(e.target.value)}
-                  className="w-full h-24 bg-black/80 border border-white/10 rounded-xl text-xs text-white/70 p-2 resize-none focus:border-primary focus:outline-none font-mono text-center"
-                  placeholder="Type your notice here..."
-                />
-              ) : (
-                <p className="text-white/50 text-xs font-mono whitespace-pre-wrap text-center">
-                  {noticeText || 'No notice posted.'}
-                </p>
-              )}
             </div>
           </motion.div>
 

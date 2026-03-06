@@ -12,6 +12,8 @@ export default function HomeDashboardPage() {
   const { token, user } = useAuth();
   const [counts, setCounts] = useState({ free: 0, admin: 0, total: 0 });
   const [loading, setLoading] = useState(true);
+  const [noticeText, setNoticeText] = useState('');
+  const [isEditingNotice, setIsEditingNotice] = useState(false);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
   const isMaster = user?.is_master === true;
@@ -55,6 +57,24 @@ export default function HomeDashboardPage() {
     fetchCounts();
   }, [token, user, headers, canAccessAdmin]);
 
+  useEffect(() => {
+    if (!token) return;
+    axios
+      .get(`${API}/admin/notice`, { headers })
+      .then(res => setNoticeText(res.data?.message || ''))
+      .catch(() => {});
+  }, [token, headers]);
+
+  const handleSaveNotice = async () => {
+    try {
+      await axios.post(`${API}/admin/notice`, { message: noticeText }, { headers });
+      setIsEditingNotice(false);
+      toast.success('Notice saved!');
+    } catch {
+      toast.error('Failed to save notice');
+    }
+  };
+
   const tierLabel = isMaster ? 'Master' : isPremium ? 'Premium' : 'Free';
 
   return (
@@ -97,6 +117,42 @@ export default function HomeDashboardPage() {
               {!loading && (
                 <p className="text-xs text-white/35 mt-1 font-mono">
                   Free: {counts.free} {canAccessAdmin ? `| Admin: ${counts.admin}` : ''}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-6 rounded-xl p-4 bg-gradient-to-b from-white/10 to-white/[0.03] border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bebas tracking-widest text-primary text-xl">
+                  ADMIN NOTICE
+                </span>
+                {isMaster &&
+                  (isEditingNotice ? (
+                    <button
+                      onClick={handleSaveNotice}
+                      className="text-xs text-green-400 hover:text-green-300 font-mono"
+                    >
+                      SAVE
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsEditingNotice(true)}
+                      className="text-xs text-white/30 hover:text-white/60 font-mono"
+                    >
+                      EDIT
+                    </button>
+                  ))}
+              </div>
+              {isMaster && isEditingNotice ? (
+                <textarea
+                  value={noticeText}
+                  onChange={e => setNoticeText(e.target.value)}
+                  className="w-full h-24 bg-black/80 border border-white/10 rounded-xl text-xs text-white/70 p-2 resize-none focus:border-primary focus:outline-none font-mono"
+                  placeholder="Type your notice here..."
+                />
+              ) : (
+                <p className="text-white/50 text-xs font-mono whitespace-pre-wrap">
+                  {noticeText || 'No notice posted.'}
                 </p>
               )}
             </div>
