@@ -42,7 +42,7 @@ class KeyCreate(BaseModel):
     max_devices: int = 1
     custom_key: Optional[str] = None
     expires_at: Optional[str] = None
-    tier: Optional[str] = "free"  # "free" | "premium"
+    tier: Optional[str] = "free"
 
 class KeyUpdate(BaseModel):
     label: Optional[str] = None
@@ -168,6 +168,98 @@ def parse_cookies_auto(text):
         if result:
             return result
     return parse_netscape_cookies(text)
+
+def parse_cookie_string_to_dict(cookie_str: str) -> dict:
+    cookies = {}
+    for pair in cookie_str.split(';'):
+        pair = pair.strip()
+        if '=' in pair:
+            k, _, v = pair.partition('=')
+            cookies[k.strip()] = v.strip()
+    return cookies
+
+# --- Plan / Member Since Helpers ---
+MONTH_MAP = {
+    'janvier': 'January', 'février': 'February', 'mars': 'March', 'avril': 'April',
+    'mai': 'May', 'juin': 'June', 'juillet': 'July', 'août': 'August',
+    'septembre': 'September', 'octobre': 'October', 'novembre': 'November', 'décembre': 'December',
+    'enero': 'January', 'febrero': 'February', 'marzo': 'March', 'abril': 'April',
+    'mayo': 'May', 'junio': 'June', 'julio': 'July', 'agosto': 'August',
+    'septiembre': 'September', 'octubre': 'October', 'noviembre': 'November', 'diciembre': 'December',
+    'janeiro': 'January', 'fevereiro': 'February', 'março': 'March',
+    'junho': 'June', 'julho': 'July', 'setembro': 'September', 'outubro': 'October',
+    'dezembro': 'December',
+    'januar': 'January', 'februar': 'February', 'märz': 'March',
+    'juni': 'June', 'juli': 'July', 'oktober': 'October', 'dezember': 'December',
+}
+
+def format_member_since(raw: str) -> str:
+    if not raw:
+        return None
+    cleaned = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), raw)
+    cleaned = cleaned.strip()
+    for foreign, english in MONTH_MAP.items():
+        cleaned = re.sub(r'\b' + re.escape(foreign) + r'\b', english, cleaned, flags=re.IGNORECASE)
+    match = re.search(r'([A-Za-zéû]+)\s*(\d{4})', cleaned)
+    if match:
+        return f"{match.group(1)} {match.group(2)}"
+    return cleaned
+
+def normalize_plan_name(raw_plan: str) -> str:
+    if not raw_plan:
+        return None
+    p = raw_plan.strip().lower()
+    plan_map = {
+        'premium': 'Premium (UHD)',
+        'premium (uhd)': 'Premium (UHD)',
+        'premium uhd': 'Premium (UHD)',
+        'premium (4k)': 'Premium (UHD)',
+        'premium 4k': 'Premium (UHD)',
+        'ultra hd': 'Premium (UHD)',
+        'offre premium': 'Premium (UHD)',
+        'piano premium': 'Premium (UHD)',
+        'plano premium': 'Premium (UHD)',
+        'plan premium': 'Premium (UHD)',
+        'premium-plan': 'Premium (UHD)',
+        'standard with ads': 'Standard with ads',
+        'standard avec pub': 'Standard with ads',
+        'standard con anuncios': 'Standard with ads',
+        'standard com anúncios': 'Standard with ads',
+        'standard mit werbung': 'Standard with ads',
+        'standard con pubblicità': 'Standard with ads',
+        'offre standard avec pub': 'Standard with ads',
+        'offre essentiel': 'Standard with ads',
+        'standard': 'Standard (HD)',
+        'standard (hd)': 'Standard (HD)',
+        'standard hd': 'Standard (HD)',
+        'offre standard': 'Standard (HD)',
+        'piano standard': 'Standard (HD)',
+        'plano padrão': 'Standard (HD)',
+        'plano standard': 'Standard (HD)',
+        'plan standard': 'Standard (HD)',
+        'plan estándar': 'Standard (HD)',
+        'estándar': 'Standard (HD)',
+        'estandar': 'Standard (HD)',
+        'padrão': 'Standard (HD)',
+        'padrao': 'Standard (HD)',
+        'standard-plan': 'Standard (HD)',
+        'basic': 'Basic',
+        'basic with ads': 'Basic with ads',
+        'básico': 'Basic',
+        'basico': 'Basic',
+        'offre basique': 'Basic',
+        'básico com anúncios': 'Basic with ads',
+        'básico con anuncios': 'Basic with ads',
+        'mobile': 'Mobile',
+        'móvil': 'Mobile',
+    }
+    if p in plan_map:
+        return plan_map[p]
+    sorted_keys = sorted(plan_map.keys(), key=len, reverse=True)
+    for key in sorted_keys:
+        if key in p:
+            return plan_map[key]
+    return raw_plan.strip().title()
 
 # --- NFToken Generator ---
 async def generate_nftoken(cookies: dict):
@@ -426,7 +518,6 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
 
     try:
         is_logged_in, browser_cookies_str, browser_cookies_dict, info = await get_browser_data(cookies)
-
         if is_logged_in:
             result["status"] = "valid"
             result["browser_cookies"] = browser_cookies_str
@@ -588,17 +679,14 @@ async def login(data: KeyLogin):
     key_doc = await db.access_keys.find_one({"key_value": data.key}, {"_id": 0})
     if not key_doc:
         raise HTTPException(status_code=401, detail="Invalid access key")
-
     expires_at = key_doc.get("expires_at")
     if expires_at:
         expiry = datetime.fromisoformat(expires_at).replace(tzinfo=timezone.utc)
         if datetime.now(timezone.utc) > expiry:
             raise HTTPException(status_code=401, detail="Access key has expired")
-
     active = key_doc.get("active_sessions", [])
     if len(active) >= key_doc.get("max_devices", 1) and not key_doc.get("is_master"):
         raise HTTPException(status_code=403, detail=f"Device limit reached ({key_doc['max_devices']})")
-
     session_id = str(uuid.uuid4())
     token = jwt.encode(
         {
@@ -661,7 +749,6 @@ async def check_cookie_with_semaphore(block, format_type, job_id, index, total, 
                         f"is already in free cookies — email: {result['email']}"
                     )
             result["is_free_cookie"] = is_free_cookie
-
             is_admin_cookie = False
             if result.get("email"):
                 existing_admin = await db.admin_cookies.find_one({"email": result["email"]})
@@ -722,26 +809,16 @@ async def run_bulk_check(job_id, cookie_blocks, format_type, user):
 async def check_cookies(data: CookieCheckRequest, user: dict = Depends(get_current_user)):
     cookie_blocks = re.split(r'\n{3,}|={5,}|-{5,}', data.cookies_text.strip())
     cookie_blocks = [b.strip() for b in cookie_blocks if b.strip()]
-
     if not cookie_blocks:
         raise HTTPException(status_code=400, detail="No cookies found")
-
     check_id = str(uuid.uuid4())
     total = len(cookie_blocks)
-
     await db.checks.insert_one({
-        "id": check_id,
-        "user_id": user["id"],
-        "results": [],
-        "total": total,
-        "checked_count": 0,
-        "valid_count": 0,
-        "expired_count": 0,
-        "invalid_count": 0,
-        "status": "processing",
+        "id": check_id, "user_id": user["id"], "results": [],
+        "total": total, "checked_count": 0, "valid_count": 0,
+        "expired_count": 0, "invalid_count": 0, "status": "processing",
         "created_at": datetime.now(timezone.utc).isoformat()
     })
-
     asyncio.create_task(run_bulk_check(check_id, cookie_blocks, data.format_type, user))
     return {"id": check_id, "total": total, "status": "processing"}
 
@@ -749,30 +826,18 @@ async def check_cookies(data: CookieCheckRequest, user: dict = Depends(get_curre
 async def check_cookies_file(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     content = await file.read()
     text = content.decode('utf-8', errors='ignore')
-
     cookie_blocks = re.split(r'\n{3,}|={5,}|-{5,}', text.strip())
     cookie_blocks = [b.strip() for b in cookie_blocks if b.strip()]
-
     if not cookie_blocks:
         raise HTTPException(status_code=400, detail="No cookies found in file")
-
     check_id = str(uuid.uuid4())
     total = len(cookie_blocks)
-
     await db.checks.insert_one({
-        "id": check_id,
-        "user_id": user["id"],
-        "results": [],
-        "total": total,
-        "checked_count": 0,
-        "valid_count": 0,
-        "expired_count": 0,
-        "invalid_count": 0,
-        "status": "processing",
-        "filename": file.filename,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "id": check_id, "user_id": user["id"], "results": [],
+        "total": total, "checked_count": 0, "valid_count": 0,
+        "expired_count": 0, "invalid_count": 0, "status": "processing",
+        "filename": file.filename, "created_at": datetime.now(timezone.utc).isoformat()
     })
-
     asyncio.create_task(run_bulk_check(check_id, cookie_blocks, "auto", user))
     return {"id": check_id, "total": total, "status": "processing"}
 
@@ -780,7 +845,6 @@ async def check_cookies_file(file: UploadFile = File(...), user: dict = Depends(
 async def check_cookies_files(files: List[UploadFile] = File(...), user: dict = Depends(get_current_user)):
     all_cookie_blocks = []
     filenames = []
-
     for file in files:
         content = await file.read()
         text = content.decode('utf-8', errors='ignore')
@@ -788,27 +852,16 @@ async def check_cookies_files(files: List[UploadFile] = File(...), user: dict = 
         cookie_blocks = [b.strip() for b in cookie_blocks if b.strip()]
         all_cookie_blocks.extend(cookie_blocks)
         filenames.append(file.filename)
-
     if not all_cookie_blocks:
         raise HTTPException(status_code=400, detail="No cookies found in uploaded files")
-
     check_id = str(uuid.uuid4())
     total = len(all_cookie_blocks)
-
     await db.checks.insert_one({
-        "id": check_id,
-        "user_id": user["id"],
-        "results": [],
-        "total": total,
-        "checked_count": 0,
-        "valid_count": 0,
-        "expired_count": 0,
-        "invalid_count": 0,
-        "status": "processing",
-        "filename": ", ".join(filenames),
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "id": check_id, "user_id": user["id"], "results": [],
+        "total": total, "checked_count": 0, "valid_count": 0,
+        "expired_count": 0, "invalid_count": 0, "status": "processing",
+        "filename": ", ".join(filenames), "created_at": datetime.now(timezone.utc).isoformat()
     })
-
     asyncio.create_task(run_bulk_check(check_id, all_cookie_blocks, "auto", user))
     return {"id": check_id, "total": total, "status": "processing", "filenames": filenames}
 
@@ -818,9 +871,7 @@ async def get_check_status(job_id: str, user: dict = Depends(get_current_user)):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return {
-        "id": job["id"],
-        "status": job.get("status", "done"),
-        "total": job["total"],
+        "id": job["id"], "status": job.get("status", "done"), "total": job["total"],
         "checked_count": job.get("checked_count", job["total"]),
         "valid_count": job.get("valid_count", 0),
         "expired_count": job.get("expired_count", 0),
@@ -831,9 +882,7 @@ async def get_check_status(job_id: str, user: dict = Depends(get_current_user)):
 # --- History Routes ---
 @api_router.get("/history")
 async def get_history(user: dict = Depends(get_current_user)):
-    checks = await db.checks.find(
-        {"user_id": user["id"]}, {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
+    checks = await db.checks.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return checks
 
 @api_router.delete("/history/{check_id}")
@@ -852,10 +901,8 @@ async def get_nftoken(data: CookieCheckRequest, user: dict = Depends(get_current
         cookies = parse_netscape_cookies(data.cookies_text)
     else:
         cookies = parse_cookies_auto(data.cookies_text)
-
     if not cookies:
         raise HTTPException(status_code=400, detail="Could not parse cookies")
-
     success, token, error = await generate_nftoken(cookies)
     if success:
         return {"success": True, "nftoken": token, "link": f"https://netflix.com/?nftoken={token}"}
@@ -890,13 +937,9 @@ async def create_key(data: KeyCreate, user: dict = Depends(require_admin)):
     key_id = str(uuid.uuid4())
     tier = data.tier if data.tier in ("free", "premium") else "free"
     await db.access_keys.insert_one({
-        "id": key_id,
-        "key_value": key_value,
-        "label": data.label,
-        "max_devices": data.max_devices,
-        "active_sessions": [],
-        "is_master": False,
-        "tier": tier,
+        "id": key_id, "key_value": key_value, "label": data.label,
+        "max_devices": data.max_devices, "active_sessions": [],
+        "is_master": False, "tier": tier,
         "expires_at": data.expires_at or None,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
@@ -906,7 +949,7 @@ async def create_key(data: KeyCreate, user: dict = Depends(require_admin)):
 async def list_keys(user: dict = Depends(require_admin)):
     keys = await db.access_keys.find({}, {"_id": 0}).to_list(100)
     for k in keys:
-        k["key_preview"] = k["key_value"][:4] + "****"
+        k["key_preview"] = "••••••••••••"
         k["session_count"] = len(k.get("active_sessions", []))
     return keys
 
@@ -920,14 +963,10 @@ async def reveal_key(key_id: str, user: dict = Depends(require_admin)):
 @api_router.patch("/admin/keys/{key_id}")
 async def update_key(key_id: str, data: KeyUpdate, user: dict = Depends(require_admin)):
     updates = {}
-    if data.label is not None:
-        updates["label"] = data.label
-    if data.max_devices is not None:
-        updates["max_devices"] = data.max_devices
-    if data.expires_at is not None:
-        updates["expires_at"] = data.expires_at if data.expires_at != "" else None
-    if data.tier is not None and data.tier in ("free", "premium"):
-        updates["tier"] = data.tier
+    if data.label is not None: updates["label"] = data.label
+    if data.max_devices is not None: updates["max_devices"] = data.max_devices
+    if data.expires_at is not None: updates["expires_at"] = data.expires_at if data.expires_at != "" else None
+    if data.tier is not None and data.tier in ("free", "premium"): updates["tier"] = data.tier
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
     await db.access_keys.update_one({"id": key_id}, {"$set": updates})
@@ -974,28 +1013,56 @@ async def clear_admin_logs(user: dict = Depends(require_admin)):
 async def add_free_cookie(data: FreeCookieAdd, user: dict = Depends(require_admin)):
     cookie_id = str(uuid.uuid4())
     await db.free_cookies.insert_one({
-        "id": cookie_id,
-        "email": data.email,
-        "plan": data.plan,
-        "country": data.country,
-        "member_since": data.member_since,
-        "next_billing": data.next_billing,
-        "profiles": data.profiles,
-        "browser_cookies": data.browser_cookies,
-        "full_cookie": data.full_cookie,
-        "nftoken": data.nftoken,
-        "nftoken_link": data.nftoken_link,
-        "added_by": user["id"],
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "id": cookie_id, "email": data.email, "plan": data.plan,
+        "country": data.country, "member_since": data.member_since,
+        "next_billing": data.next_billing, "profiles": data.profiles,
+        "browser_cookies": data.browser_cookies, "full_cookie": data.full_cookie,
+        "nftoken": data.nftoken, "nftoken_link": data.nftoken_link,
+        "added_by": user["id"], "created_at": datetime.now(timezone.utc).isoformat()
     })
     return {"id": cookie_id, "message": "Free cookie added"}
 
 @api_router.get("/admin/free-cookies")
-async def get_all_free_cookies_admin(user: dict = Depends(require_admin)):
-    cookies = await db.free_cookies.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+async def get_all_free_cookies_admin(
+    user: dict = Depends(require_admin),
+    page: int = 1,
+    page_size: int = 20,
+    status: str = "all",
+    plan: str = "",
+    country: str = ""
+):
     setting = await db.settings.find_one({"key": "free_cookies_limit"}, {"_id": 0})
-    limit = setting["value"] if setting else 10
-    return {"cookies": cookies, "display_limit": limit}
+    display_limit = setting.get("value", 10) if setting else 10
+
+    query = {}
+    if status == "alive":
+        query["is_alive"] = {"$ne": False}
+    elif status == "dead":
+        query["is_alive"] = False
+    if plan:
+        query["plan"] = {"$regex": plan, "$options": "i"}
+    if country:
+        query["country"] = {"$regex": country, "$options": "i"}
+
+    total = await db.free_cookies.count_documents(query)
+    skip = (page - 1) * page_size
+
+    cookies = (
+        await db.free_cookies.find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(page_size)
+        .to_list(page_size)
+    )
+
+    return {
+        "cookies": cookies,
+        "display_limit": display_limit,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": -(-total // page_size)
+    }
 
 @api_router.delete("/admin/free-cookies/{cookie_id}")
 async def delete_free_cookie(cookie_id: str, user: dict = Depends(require_admin)):
@@ -1014,27 +1081,75 @@ async def set_free_cookies_limit(data: FreeCookieLimitUpdate, user: dict = Depen
     return {"message": "Limit updated", "limit": data.limit}
 
 @api_router.get("/free-cookies")
-async def get_free_cookies(user: dict = Depends(get_current_user)):
+async def get_free_cookies(
+    user: dict = Depends(get_current_user),
+    page: int = 1,
+    page_size: int = 20,
+    status: str = "all",
+    plan: str = "",
+    country: str = ""
+):
     setting = await db.settings.find_one({"key": "free_cookies_limit"}, {"_id": 0})
-    base_limit = setting["value"] if setting else 10
+    base_limit = setting.get("value", 10) if setting else 10
 
     if user.get("is_master") or user.get("tier") == "premium":
-        limit = 500
+        sort_order = -1
+        max_cookies = 500
     else:
-        limit = base_limit
+        sort_order = 1
+        max_cookies = base_limit
 
-    cookies = await db.free_cookies.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    query = {}
+    if status == "alive":
+        query["is_alive"] = {"$ne": False}
+    elif status == "dead":
+        query["is_alive"] = False
+    if plan:
+        query["plan"] = {"$regex": plan, "$options": "i"}
+    if country:
+        query["country"] = {"$regex": country, "$options": "i"}
+
+    total_available = await db.free_cookies.count_documents(query)
+    total = min(total_available, max_cookies)
+
+    skip = (page - 1) * page_size
+
+    if skip >= total:
+        return {
+            "cookies": [],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": -(-total // page_size)
+        }
+
+    effective_limit = min(page_size, total - skip)
+
+    cookies = (
+        await db.free_cookies.find(query, {"_id": 0})
+        .sort("created_at", sort_order)
+        .skip(skip)
+        .limit(effective_limit)
+        .to_list(effective_limit)
+    )
+
     if not user.get("is_master"):
         for c in cookies:
             c.pop("browser_cookies", None)
-    return cookies
+
+    return {
+        "cookies": cookies,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": -(-total // page_size)
+    }
 
 @api_router.post("/admin/free-cookies/refresh")
 async def force_refresh_tokens(user: dict = Depends(require_admin)):
     free_cookies = await db.free_cookies.find({}, {"_id": 0}).to_list(500)
     if not free_cookies:
         return {"message": "No free cookies to refresh", "refreshed": 0, "dead": 0, "total": 0}
-
     refreshed = 0
     dead = 0
     for fc in free_cookies:
@@ -1078,7 +1193,6 @@ async def refresh_single_free_cookie_token(cookie_id: str, user: dict = Depends(
     fc = await db.free_cookies.find_one({"id": cookie_id}, {"_id": 0})
     if not fc:
         raise HTTPException(status_code=404, detail="Cookie not found")
-
     cookies_dict = None
     if fc.get("browser_cookies"):
         cookies_dict = parse_cookie_string_to_dict(fc["browser_cookies"])
@@ -1087,19 +1201,18 @@ async def refresh_single_free_cookie_token(cookie_id: str, user: dict = Depends(
             cookies_dict = parse_cookies_auto(fc["full_cookie"])
     if not cookies_dict:
         raise HTTPException(status_code=400, detail="Cookie data is invalid or expired")
-
     success, nft, nft_err = await generate_nftoken(cookies_dict)
     if success and nft:
         await db.free_cookies.update_one(
             {"id": cookie_id},
             {"$set": {
                 "nftoken": nft,
-                "nftoken_link": f"https://netflix.com?nftoken={nft}",
+                "nftoken_link": f"https://netflix.com/?nftoken={nft}",
                 "is_alive": True,
                 "last_refreshed": datetime.now(timezone.utc).isoformat()
             }}
         )
-        return {"nftoken": nft, "nftoken_link": f"https://netflix.com?nftoken={nft}"}
+        return {"nftoken": nft, "nftoken_link": f"https://netflix.com/?nftoken={nft}"}
     else:
         await db.free_cookies.update_one(
             {"id": cookie_id},
@@ -1112,19 +1225,12 @@ async def refresh_single_free_cookie_token(cookie_id: str, user: dict = Depends(
 async def add_admin_cookie(data: AdminCookieAdd, user: dict = Depends(require_admin_or_premium)):
     cookie_id = str(uuid.uuid4())
     await db.admin_cookies.insert_one({
-        "id": cookie_id,
-        "email": data.email,
-        "plan": data.plan,
-        "country": data.country,
-        "member_since": data.member_since,
-        "next_billing": data.next_billing,
-        "profiles": data.profiles,
-        "browser_cookies": data.browser_cookies,
-        "full_cookie": data.full_cookie,
-        "nftoken": data.nftoken,
-        "nftoken_link": data.nftoken_link,
-        "added_by": user["id"],
-        "is_alive": True,
+        "id": cookie_id, "email": data.email, "plan": data.plan,
+        "country": data.country, "member_since": data.member_since,
+        "next_billing": data.next_billing, "profiles": data.profiles,
+        "browser_cookies": data.browser_cookies, "full_cookie": data.full_cookie,
+        "nftoken": data.nftoken, "nftoken_link": data.nftoken_link,
+        "added_by": user["id"], "is_alive": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
     return {"id": cookie_id, "message": "Admin cookie added"}
@@ -1148,7 +1254,6 @@ async def force_refresh_admin_tokens(user: dict = Depends(require_admin_or_premi
     admin_cookies = await db.admin_cookies.find({}, {"_id": 0}).to_list(500)
     if not admin_cookies:
         return {"message": "No admin cookies to refresh", "refreshed": 0, "dead": 0, "total": 0}
-
     refreshed = 0
     dead = 0
     for ac in admin_cookies:
@@ -1192,7 +1297,6 @@ async def refresh_single_admin_cookie_token(cookie_id: str, user: dict = Depends
     ac = await db.admin_cookies.find_one({"id": cookie_id}, {"_id": 0})
     if not ac:
         raise HTTPException(status_code=404, detail="Admin cookie not found")
-
     cookies_dict = None
     if ac.get("browser_cookies"):
         cookies_dict = parse_cookie_string_to_dict(ac["browser_cookies"])
@@ -1201,25 +1305,74 @@ async def refresh_single_admin_cookie_token(cookie_id: str, user: dict = Depends
             cookies_dict = parse_cookies_auto(ac["full_cookie"])
     if not cookies_dict:
         raise HTTPException(status_code=400, detail="Cookie data is invalid or expired")
-
     success, nft, nft_err = await generate_nftoken(cookies_dict)
     if success and nft:
         await db.admin_cookies.update_one(
             {"id": cookie_id},
             {"$set": {
                 "nftoken": nft,
-                "nftoken_link": f"https://netflix.com?nftoken={nft}",
+                "nftoken_link": f"https://netflix.com/?nftoken={nft}",
                 "is_alive": True,
                 "last_refreshed": datetime.now(timezone.utc).isoformat()
             }}
         )
-        return {"nftoken": nft, "nftoken_link": f"https://netflix.com?nftoken={nft}"}
+        return {"nftoken": nft, "nftoken_link": f"https://netflix.com/?nftoken={nft}"}
     else:
         await db.admin_cookies.update_one(
             {"id": cookie_id},
             {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
         )
         raise HTTPException(status_code=400, detail=nft_err or "Failed to generate token — cookie may be dead")
+
+# --- Favorites Routes (Premium/Master only) ---
+@api_router.post("/favorites/{cookie_id}")
+async def toggle_favorite(cookie_id: str, user: dict = Depends(require_admin_or_premium)):
+    key_doc = await db.access_keys.find_one({"id": user["id"]}, {"_id": 0})
+    if not key_doc:
+        raise HTTPException(status_code=404, detail="Key not found")
+    favorites = key_doc.get("favorites", [])
+    if cookie_id in favorites:
+        await db.access_keys.update_one(
+            {"id": user["id"]},
+            {"$pull": {"favorites": cookie_id}}
+        )
+        return {"favorited": False, "message": "Removed from favorites"}
+    else:
+        await db.access_keys.update_one(
+            {"id": user["id"]},
+            {"$addToSet": {"favorites": cookie_id}}
+        )
+        return {"favorited": True, "message": "Added to favorites"}
+
+@api_router.get("/favorites/ids")
+async def get_favorite_ids(user: dict = Depends(require_admin_or_premium)):
+    key_doc = await db.access_keys.find_one({"id": user["id"]}, {"_id": 0})
+    if not key_doc:
+        return {"favorites": []}
+    return {"favorites": key_doc.get("favorites", [])}
+
+@api_router.get("/favorites")
+async def get_favorites(user: dict = Depends(require_admin_or_premium)):
+    key_doc = await db.access_keys.find_one({"id": user["id"]}, {"_id": 0})
+    if not key_doc:
+        return {"cookies": []}
+    favorite_ids = key_doc.get("favorites", [])
+    if not favorite_ids:
+        return {"cookies": []}
+    free_cookies = await db.free_cookies.find(
+        {"id": {"$in": favorite_ids}}, {"_id": 0}
+    ).to_list(500)
+    admin_cookies = await db.admin_cookies.find(
+        {"id": {"$in": favorite_ids}}, {"_id": 0}
+    ).to_list(500)
+    for c in free_cookies:
+        c["source"] = "free"
+        if not user.get("is_master"):
+            c.pop("browser_cookies", None)
+    for c in admin_cookies:
+        c["source"] = "admin"
+    all_cookies = free_cookies + admin_cookies
+    return {"cookies": all_cookies}
 
 # --- TV Sign-In Code ---
 async def activate_tv_code(cookies: dict, code: str):
@@ -1235,41 +1388,32 @@ async def activate_tv_code(cookies: dict, code: str):
                 viewport={'width': 1920, 'height': 1080},
                 locale='en-US'
             )
-
             cookie_list = [{
                 "name": name, "value": value,
                 "domain": ".netflix.com", "path": "/",
                 "secure": True, "sameSite": "None"
             } for name, value in cookies.items()]
             await context.add_cookies(cookie_list)
-
             page = await context.new_page()
             await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
             await page.goto("https://www.netflix.com/clearbrowsinghistory/tv8", timeout=25000)
             await page.wait_for_load_state("domcontentloaded", timeout=15000)
             await page.wait_for_timeout(2000)
-
             url = page.url
             if '/login' in url or '/LoginHelp' in url:
                 await browser.close()
                 return False, "Cookie expired - redirected to login"
-
             await page.goto("https://www.netflix.com/tv8", timeout=25000)
             await page.wait_for_load_state("domcontentloaded", timeout=15000)
             await page.wait_for_timeout(3000)
-
             url = page.url
             if '/login' in url or '/LoginHelp' in url:
                 await browser.close()
                 return False, "Cookie expired - redirected to login"
-
             clean_code = code.replace(' ', '').replace('-', '').strip()
             filled = False
-
             digit_inputs = page.locator('input[type="tel"], input[type="text"], input[type="number"]')
             count = await digit_inputs.count()
-
             if count >= len(clean_code):
                 for i, digit in enumerate(clean_code):
                     if i < count:
@@ -1279,7 +1423,6 @@ async def activate_tv_code(cookies: dict, code: str):
             elif count == 1:
                 await digit_inputs.first.fill(clean_code)
                 filled = True
-
             if not filled:
                 for selector in ['input[name="pin"]', 'input[data-uia="pin-input"]', 'input.pin-input', '#code-input', 'input']:
                     try:
@@ -1290,13 +1433,10 @@ async def activate_tv_code(cookies: dict, code: str):
                             break
                     except Exception:
                         continue
-
             if not filled:
                 await browser.close()
                 return False, "Could not find code input field on the page"
-
             await page.wait_for_timeout(1000)
-
             submitted = False
             for selector in ['button[type="submit"]', 'button[data-uia="action-button"]', 'button:has-text("Continue")', 'button:has-text("Activate")', 'button:has-text("Next")', 'button:has-text("Sign In")']:
                 try:
@@ -1307,17 +1447,12 @@ async def activate_tv_code(cookies: dict, code: str):
                         break
                 except Exception:
                     continue
-
             if not submitted:
                 await page.keyboard.press("Enter")
-
             await page.wait_for_timeout(5000)
-
             final_url = page.url
             page_text = await page.inner_text('body')
-
             await browser.close()
-
             if any(kw in page_text.lower() for kw in ['success', 'activated', 'signed in', 'enjoy', 'start watching', 'welcome']):
                 return True, "TV device activated successfully!"
             elif any(kw in page_text.lower() for kw in ['invalid', 'expired', 'incorrect', 'try again', 'error']):
@@ -1326,7 +1461,6 @@ async def activate_tv_code(cookies: dict, code: str):
                 return True, "TV device activated! Code accepted."
             else:
                 return True, "Code submitted. Check your TV — it should be signed in now."
-
     except Exception as e:
         logger.error(f"TV code activation error: {e}")
         return False, f"Activation failed: {str(e)}"
@@ -1335,9 +1469,7 @@ async def activate_tv_code(cookies: dict, code: str):
 async def submit_tv_code(data: TVCodeRequest, user: dict = Depends(get_current_user)):
     if not data.code.strip():
         raise HTTPException(status_code=400, detail="Enter a TV sign-in code")
-
     cookies_dict = None
-
     if data.cookie_source == "admin":
         ac = await db.admin_cookies.find_one({"id": data.cookie_id}, {"_id": 0})
         if not ac:
@@ -1354,110 +1486,13 @@ async def submit_tv_code(data: TVCodeRequest, user: dict = Depends(get_current_u
             cookies_dict = parse_cookie_string_to_dict(fc["browser_cookies"])
         if (not cookies_dict or not cookies_dict.get("NetflixId")) and fc.get("full_cookie"):
             cookies_dict = parse_cookies_auto(fc["full_cookie"])
-
     if not cookies_dict:
         raise HTTPException(status_code=400, detail="Cookie data is invalid")
-
     success, message = await activate_tv_code(cookies_dict, data.code)
     return {"success": success, "message": message}
 
 # --- NFToken Auto-Refresh ---
 NFTOKEN_REFRESH_INTERVAL = 10 * 60
-
-MONTH_MAP = {
-    'janvier': 'January', 'février': 'February', 'mars': 'March', 'avril': 'April',
-    'mai': 'May', 'juin': 'June', 'juillet': 'July', 'août': 'August',
-    'septembre': 'September', 'octobre': 'October', 'novembre': 'November', 'décembre': 'December',
-    'enero': 'January', 'febrero': 'February', 'marzo': 'March', 'abril': 'April',
-    'mayo': 'May', 'junio': 'June', 'julio': 'July', 'agosto': 'August',
-    'septiembre': 'September', 'octubre': 'October', 'noviembre': 'November', 'diciembre': 'December',
-    'janeiro': 'January', 'fevereiro': 'February', 'março': 'March',
-    'junho': 'June', 'julho': 'July', 'setembro': 'September', 'outubro': 'October',
-    'dezembro': 'December',
-    'januar': 'January', 'februar': 'February', 'märz': 'March',
-    'juni': 'June', 'juli': 'July', 'oktober': 'October', 'dezember': 'December',
-}
-
-def format_member_since(raw: str) -> str:
-    if not raw:
-        return None
-    cleaned = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), raw)
-    cleaned = cleaned.strip()
-    for foreign, english in MONTH_MAP.items():
-        cleaned = re.sub(r'\b' + re.escape(foreign) + r'\b', english, cleaned, flags=re.IGNORECASE)
-    match = re.search(r'([A-Za-zéû]+)\s*(\d{4})', cleaned)
-    if match:
-        return f"{match.group(1)} {match.group(2)}"
-    return cleaned
-
-def normalize_plan_name(raw_plan: str) -> str:
-    if not raw_plan:
-        return None
-    p = raw_plan.strip().lower()
-
-    plan_map = {
-        'premium': 'Premium (UHD)',
-        'premium (uhd)': 'Premium (UHD)',
-        'premium uhd': 'Premium (UHD)',
-        'premium (4k)': 'Premium (UHD)',
-        'premium 4k': 'Premium (UHD)',
-        'ultra hd': 'Premium (UHD)',
-        'offre premium': 'Premium (UHD)',
-        'piano premium': 'Premium (UHD)',
-        'plano premium': 'Premium (UHD)',
-        'plan premium': 'Premium (UHD)',
-        'premium-plan': 'Premium (UHD)',
-        'standard with ads': 'Standard with ads',
-        'standard avec pub': 'Standard with ads',
-        'standard con anuncios': 'Standard with ads',
-        'standard com anúncios': 'Standard with ads',
-        'standard mit werbung': 'Standard with ads',
-        'standard con pubblicità': 'Standard with ads',
-        'offre standard avec pub': 'Standard with ads',
-        'offre essentiel': 'Standard with ads',
-        'standard': 'Standard (HD)',
-        'standard (hd)': 'Standard (HD)',
-        'standard hd': 'Standard (HD)',
-        'offre standard': 'Standard (HD)',
-        'piano standard': 'Standard (HD)',
-        'plano padrão': 'Standard (HD)',
-        'plano standard': 'Standard (HD)',
-        'plan standard': 'Standard (HD)',
-        'plan estándar': 'Standard (HD)',
-        'estándar': 'Standard (HD)',
-        'estandar': 'Standard (HD)',
-        'padrão': 'Standard (HD)',
-        'padrao': 'Standard (HD)',
-        'standard-plan': 'Standard (HD)',
-        'basic': 'Basic',
-        'basic with ads': 'Basic with ads',
-        'básico': 'Basic',
-        'basico': 'Basic',
-        'offre basique': 'Basic',
-        'básico com anúncios': 'Basic with ads',
-        'básico con anuncios': 'Basic with ads',
-        'mobile': 'Mobile',
-        'móvil': 'Mobile',
-    }
-
-    if p in plan_map:
-        return plan_map[p]
-
-    sorted_keys = sorted(plan_map.keys(), key=len, reverse=True)
-    for key in sorted_keys:
-        if key in p:
-            return plan_map[key]
-
-    return raw_plan.strip().title()
-
-def parse_cookie_string_to_dict(cookie_str: str) -> dict:
-    cookies = {}
-    for pair in cookie_str.split(';'):
-        pair = pair.strip()
-        if '=' in pair:
-            k, _, v = pair.partition('=')
-            cookies[k.strip()] = v.strip()
-    return cookies
 
 async def refresh_free_cookie_tokens():
     first_run = True
@@ -1471,11 +1506,9 @@ async def refresh_free_cookie_tokens():
             free_cookies = await db.free_cookies.find({}, {"_id": 0}).to_list(500)
             if not free_cookies:
                 continue
-
             logger.info(f"NFToken refresh: processing {len(free_cookies)} free cookies")
             refreshed = 0
             dead = 0
-
             for fc in free_cookies:
                 try:
                     cookies_dict = None
@@ -1483,7 +1516,6 @@ async def refresh_free_cookie_tokens():
                         cookies_dict = parse_cookie_string_to_dict(fc["browser_cookies"])
                     if (not cookies_dict or not cookies_dict.get("NetflixId")) and fc.get("full_cookie"):
                         cookies_dict = parse_cookies_auto(fc["full_cookie"])
-
                     if not cookies_dict:
                         await db.free_cookies.update_one(
                             {"id": fc["id"]},
@@ -1491,7 +1523,6 @@ async def refresh_free_cookie_tokens():
                         )
                         dead += 1
                         continue
-
                     success, nft, nft_err = await generate_nftoken(cookies_dict)
                     if success and nft:
                         await db.free_cookies.update_one(
@@ -1513,7 +1544,6 @@ async def refresh_free_cookie_tokens():
                         logger.warning(f"NFToken refresh failed for {fc['id']}: {nft_err}")
                 except Exception as e:
                     logger.warning(f"NFToken refresh error for {fc['id']}: {e}")
-
             logger.info(f"NFToken refresh complete: {refreshed} alive, {dead} dead out of {len(free_cookies)}")
         except asyncio.CancelledError:
             logger.info("NFToken refresh task cancelled")
@@ -1554,7 +1584,6 @@ async def seed_master_key():
     elif existing["key_value"] != master_key:
         await db.access_keys.update_one({"is_master": True}, {"$set": {"key_value": master_key}})
         logger.info("Master key updated")
-
     _refresh_task = asyncio.create_task(refresh_free_cookie_tokens())
     logger.info("NFToken auto-refresh task started (every 10 min)")
 
