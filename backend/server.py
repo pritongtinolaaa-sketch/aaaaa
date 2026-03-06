@@ -89,6 +89,11 @@ class TVCodeRequest(BaseModel):
 class NoticeUpdate(BaseModel):
     message: str
 
+class GuideUpdate(BaseModel):
+    pc: str
+    mobile: str
+    tv: str
+
 # --- Auth Helpers ---
 async def get_current_user(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -948,6 +953,35 @@ async def set_notice(data: NoticeUpdate, user: dict = Depends(require_admin)):
         upsert=True
     )
     return {"message": data.message}
+
+@api_router.get("/admin/guide")
+async def get_guide(user: dict = Depends(get_current_user)):
+    defaults = {
+        "pc": "Open Cookie Checker and paste/upload cookies, then review results.",
+        "mobile": "Use your phone browser to open saved token links and sign in quickly.",
+        "tv": "Open a cookie card, use TV sign-in code, then activate from the site.",
+    }
+    setting = await db.settings.find_one({"key": "site_guide"}, {"_id": 0})
+    value = setting.get("value", {}) if setting else {}
+    return {
+        "pc": value.get("pc", defaults["pc"]),
+        "mobile": value.get("mobile", defaults["mobile"]),
+        "tv": value.get("tv", defaults["tv"]),
+    }
+
+@api_router.post("/admin/guide")
+async def set_guide(data: GuideUpdate, user: dict = Depends(require_admin)):
+    value = {
+        "pc": (data.pc or "").strip(),
+        "mobile": (data.mobile or "").strip(),
+        "tv": (data.tv or "").strip(),
+    }
+    await db.settings.update_one(
+        {"key": "site_guide"},
+        {"$set": {"key": "site_guide", "value": value}},
+        upsert=True
+    )
+    return value
 
 # --- Admin Key Routes ---
 @api_router.post("/admin/keys")

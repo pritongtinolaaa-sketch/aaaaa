@@ -7,6 +7,11 @@ import { toast } from 'sonner';
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const DEFAULT_GUIDE = {
+  pc: 'Open Cookie Checker and paste/upload cookies, then review results.',
+  mobile: 'Use your phone browser to open saved token links and sign in quickly.',
+  tv: 'Open a cookie card, use TV sign-in code, then activate from the site.',
+};
 
 export default function HomeDashboardPage() {
   const { token, user } = useAuth();
@@ -14,6 +19,8 @@ export default function HomeDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [noticeText, setNoticeText] = useState('');
   const [isEditingNotice, setIsEditingNotice] = useState(false);
+  const [guide, setGuide] = useState(DEFAULT_GUIDE);
+  const [isEditingGuide, setIsEditingGuide] = useState(false);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
   const isMaster = user?.is_master === true;
@@ -65,6 +72,20 @@ export default function HomeDashboardPage() {
       .catch(() => {});
   }, [token, headers]);
 
+  useEffect(() => {
+    if (!token) return;
+    axios
+      .get(`${API}/admin/guide`, { headers })
+      .then(res =>
+        setGuide({
+          pc: res.data?.pc || DEFAULT_GUIDE.pc,
+          mobile: res.data?.mobile || DEFAULT_GUIDE.mobile,
+          tv: res.data?.tv || DEFAULT_GUIDE.tv,
+        }),
+      )
+      .catch(() => {});
+  }, [token, headers]);
+
   const handleSaveNotice = async () => {
     try {
       await axios.post(`${API}/admin/notice`, { message: noticeText }, { headers });
@@ -72,6 +93,26 @@ export default function HomeDashboardPage() {
       toast.success('Notice saved!');
     } catch {
       toast.error('Failed to save notice');
+    }
+  };
+
+  const handleSaveGuide = async () => {
+    try {
+      const payload = {
+        pc: String(guide.pc || '').trim(),
+        mobile: String(guide.mobile || '').trim(),
+        tv: String(guide.tv || '').trim(),
+      };
+      await axios.post(`${API}/admin/guide`, payload, { headers });
+      setGuide({
+        pc: payload.pc || DEFAULT_GUIDE.pc,
+        mobile: payload.mobile || DEFAULT_GUIDE.mobile,
+        tv: payload.tv || DEFAULT_GUIDE.tv,
+      });
+      setIsEditingGuide(false);
+      toast.success('Guide updated');
+    } catch {
+      toast.error('Failed to update guide');
     }
   };
 
@@ -179,30 +220,65 @@ export default function HomeDashboardPage() {
           transition={{ delay: 0.08 }}
           className="mt-6 rounded-2xl p-5 md:p-6 bg-gradient-to-b from-white/10 to-white/[0.03] border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_rgba(0,0,0,0.5)]"
         >
-          <h2 className="font-bebas tracking-widest text-white text-2xl mb-3">
-            HOW TO USE THE SITE
-          </h2>
-          <ol className="space-y-2 text-sm text-white/70 leading-relaxed list-decimal pl-5">
-            <li>
-              Open <span className="text-white">Cookie Checker</span> to paste or
-              upload cookies and validate them.
-            </li>
-            <li>
-              Review results and export valid cookies from the results section.
-            </li>
-            <li>
-              Browse <span className="text-green-400">Free Cookies</span> and use
-              favorites to save cookies you want quick access to.
-            </li>
-            <li>
-              Premium and Master keys can also access{' '}
-              <span className="text-purple-400">Admin Cookies</span>.
-            </li>
-            <li>
-              Use the <span className="text-primary">Keys</span> page (Master only)
-              to manage key names, tier, sessions, and expiry.
-            </li>
-          </ol>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-bebas tracking-widest text-white text-2xl">
+              HOW TO USE THE SITE
+            </h2>
+            {isMaster &&
+              (isEditingGuide ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSaveGuide}
+                    className="text-xs text-green-400 hover:text-green-300 font-mono"
+                  >
+                    SAVE
+                  </button>
+                  <button
+                    onClick={() => setIsEditingGuide(false)}
+                    className="text-xs text-white/30 hover:text-white/60 font-mono"
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsEditingGuide(true)}
+                  className="text-xs text-white/30 hover:text-white/60 font-mono"
+                >
+                  EDIT
+                </button>
+              ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { key: 'pc', title: 'PC' },
+              { key: 'mobile', title: 'MOBILE' },
+              { key: 'tv', title: 'TV' },
+            ].map(item => (
+              <div
+                key={item.key}
+                className="rounded-xl border border-white/15 bg-black/30 p-4 min-h-[140px]"
+              >
+                <h3 className="font-bebas tracking-widest text-primary text-xl mb-2">
+                  {item.title}
+                </h3>
+                {isMaster && isEditingGuide ? (
+                  <textarea
+                    value={guide[item.key]}
+                    onChange={e =>
+                      setGuide(prev => ({ ...prev, [item.key]: e.target.value }))
+                    }
+                    className="w-full h-24 bg-black/70 border border-white/10 rounded-lg text-xs text-white/70 p-2 resize-none focus:border-primary focus:outline-none font-mono"
+                  />
+                ) : (
+                  <p className="text-white/70 text-xs font-mono whitespace-pre-wrap leading-relaxed">
+                    {guide[item.key]}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         </motion.div>
       </div>
     </div>
