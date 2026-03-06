@@ -1,35 +1,38 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import axios from 'axios';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
-  Cookie,
+  Gift,
+  Trash2,
+  Copy,
+  Check,
   Loader2,
-  RefreshCw,
-  Filter,
-  Globe,
-  CreditCard,
   Mail,
-  Star,
-  Tv,
-  Monitor,
-  Smartphone,
-  Key,
-  Link2,
-  X,
+  CreditCard,
+  Globe,
   Calendar,
   Clock,
   Users,
-  Check,
-  Copy,
+  Key,
+  Link2,
+  Settings,
+  RefreshCw,
+  Tv,
+  Monitor,
+  Smartphone,
+  X,
+  Filter,
+  Star,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-function CopyBtn({ text }) {
+function CopyBtn({ text, testId }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
     try {
@@ -51,6 +54,7 @@ function CopyBtn({ text }) {
   return (
     <button
       onClick={handleCopy}
+      data-testid={testId}
       className="p-1.5 rounded bg-white/5 hover:bg-white/10 transition-colors"
     >
       {copied ? (
@@ -62,63 +66,46 @@ function CopyBtn({ text }) {
   );
 }
 
-function FilterBar({ cookies, filters, onChange }) {
+function InfoRow({ icon, label, value }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-white/20">{icon}</span>
+      <span className="text-white/40 text-xs uppercase tracking-wide w-24 shrink-0">
+        {label}
+      </span>
+      <span className="text-white/90 text-sm font-medium truncate">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function FilterBar({ filters, setFilters, planOptions, countryOptions }) {
   const statuses = ['all', 'alive', 'dead'];
-
-  const plans = useMemo(() => {
-    const set = new Set(cookies.map(c => c.plan).filter(Boolean));
-    const order = [
-      'Basic',
-      'Basic with ads',
-      'Mobile',
-      'Standard with ads',
-      'Standard (HD)',
-      'Premium (UHD)',
-    ];
-    const sorted = Array.from(set).sort((a, b) => {
-      const ai = order.findIndex(o =>
-        a?.toLowerCase().includes(o.split(' ')[0].toLowerCase()),
-      );
-      const bi = order.findIndex(o =>
-        b?.toLowerCase().includes(o.split(' ')[0].toLowerCase()),
-      );
-      if (ai === -1 && bi === -1) return a.localeCompare(b);
-      if (ai === -1) return 1;
-      if (bi === -1) return -1;
-      return ai - bi;
-    });
-    return ['all', ...sorted];
-  }, [cookies]);
-
-  const countries = useMemo(() => {
-    const set = new Set(cookies.map(c => c.country).filter(Boolean));
-    return ['all', ...Array.from(set).sort()];
-  }, [cookies]);
-
   const selectClass =
-    'bg-black/50 border border-white/10 text-white/60 text-xs rounded-lg px-3 h-8 outline-none focus:border-emerald-500/40 cursor-pointer hover:border-white/20 transition-colors';
+    'bg-black/50 border border-white/10 text-white/60 text-xs rounded-lg px-3 h-8 outline-none focus:border-green-500/40 cursor-pointer hover:border-white/20 transition-colors';
 
   return (
-    <div className="flex flex-wrap items-center gap-2 mb-6">
+    <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
       <div className="flex items-center gap-1.5 text-white/20 mr-1">
         <Filter className="w-3.5 h-3.5" />
         <span className="text-xs font-mono uppercase tracking-wide">
           Filter
         </span>
       </div>
-
       <div className="flex items-center gap-1">
         {statuses.map(s => (
           <button
             key={s}
-            onClick={() => onChange({ ...filters, status: s })}
+            onClick={() => setFilters(f => ({ ...f, status: s }))}
             className={`px-3 h-8 rounded-lg text-xs font-mono uppercase tracking-wide transition-all border ${
               filters.status === s
                 ? s === 'alive'
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                  ? 'bg-green-500/20 text-green-400 border-green-500/40'
                   : s === 'dead'
                   ? 'bg-red-500/20 text-red-400 border-red-500/40'
-                  : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                  : 'bg-white/10 text-white/70 border-white/20'
                 : 'bg-transparent text-white/25 border-white/8 hover:border-white/15 hover:text-white/40'
             }`}
           >
@@ -126,37 +113,34 @@ function FilterBar({ cookies, filters, onChange }) {
           </button>
         ))}
       </div>
-
       <select
         value={filters.plan}
-        onChange={e => onChange({ ...filters, plan: e.target.value })}
+        onChange={e => setFilters(f => ({ ...f, plan: e.target.value }))}
         className={selectClass}
       >
-        {plans.map(p => (
+        {planOptions.map(p => (
           <option key={p} value={p} className="bg-[#111]">
             {p === 'all' ? 'All Plans' : p}
           </option>
         ))}
       </select>
-
       <select
         value={filters.country}
-        onChange={e => onChange({ ...filters, country: e.target.value })}
+        onChange={e => setFilters(f => ({ ...f, country: e.target.value }))}
         className={selectClass}
       >
-        {countries.map(c => (
+        {countryOptions.map(c => (
           <option key={c} value={c} className="bg-[#111]">
             {c === 'all' ? 'All Countries' : c}
           </option>
         ))}
       </select>
-
       {(filters.status !== 'all' ||
         filters.plan !== 'all' ||
         filters.country !== 'all') && (
         <button
           onClick={() =>
-            onChange({ status: 'all', plan: 'all', country: 'all' })
+            setFilters({ status: 'all', plan: 'all', country: 'all' })
           }
           className="px-3 h-8 rounded-lg text-xs font-mono uppercase tracking-wide text-white/25 border border-white/8 hover:text-red-400 hover:border-red-500/30 transition-all"
         >
@@ -167,94 +151,113 @@ function FilterBar({ cookies, filters, onChange }) {
   );
 }
 
-function FreeCookieCard({
+function FreeCookieSmallCard({
   cookie,
-  index,
-  onClick,
-  isPremium,
-  isFavorited,
+  globalIndex,
+  isAdmin,
   canFavorite,
+  isFavorited,
+  onDelete,
+  onClick,
   onToggleFavorite,
 }) {
   const isAlive = cookie.is_alive !== false;
   return (
     <motion.div
+      data-testid={`free-cookie-card-${globalIndex}`}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.03 }}
+      transition={{ delay: (globalIndex % 20) * 0.04 }}
       onClick={onClick}
-      className="group cursor-pointer rounded-xl p-4 bg-gradient-to-b from-zinc-900/80 to-black border border-white/5 hover:border-emerald-500/40 hover:shadow-lg transition-all"
+      className={`group cursor-pointer rounded-xl p-4 transition-all duration-150
+        bg-gradient-to-b from-white/10 to-white/[0.03]
+        border border-white/20
+        shadow-[inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(0,0,0,0.4),0_8px_24px_rgba(0,0,0,0.6)]
+        hover:from-white/[0.13] hover:to-white/[0.05]
+        hover:border-green-500/40
+        hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(0,0,0,0.5),0_12px_32px_rgba(0,0,0,0.7)]
+        active:scale-[0.97]`}
     >
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <div
-            className={`w-2 h-2 rounded-full ${
+            className={`w-2 h-2 rounded-full shrink-0 ${
               isAlive
-                ? 'bg-emerald-400 shadow-[0_0_6px_rgba(74,222,128,0.5)]'
-                : 'bg-red-400'
+                ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.5)]'
+                : 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.5)]'
             }`}
           />
           <span className="font-mono text-xs text-white/30">
-            #{index + 1}
+            #{globalIndex + 1}
           </span>
+        </div>
+
+        <div className="flex items-center gap-1">
           <Badge
-            className={`border text-[10px] font-mono px-1.5 py-0 ${
+            className={`${
               isAlive
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                ? 'bg-green-500/20 text-green-400 border-green-500/30'
                 : 'bg-red-500/20 text-red-400 border-red-500/30'
-            }`}
+            } border text-[10px] font-mono px-1.5 py-0`}
           >
             {isAlive ? 'ALIVE' : 'DEAD'}
           </Badge>
-          {isPremium && (
-            <Badge className="bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[10px] font-mono px-1.5 py-0">
-              PREMIUM KEY
-            </Badge>
+
+          {canFavorite && (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                onToggleFavorite(cookie.id);
+              }}
+              className={`p-1 transition-all ${
+                isFavorited
+                  ? 'text-yellow-400 hover:text-yellow-300'
+                  : 'text-white/15 hover:text-yellow-400'
+              }`}
+              data-testid={`favorite-btn-${globalIndex}`}
+            >
+              <Star
+                className={`w-3.5 h-3.5 ${
+                  isFavorited ? 'fill-yellow-400' : ''
+                }`}
+              />
+            </button>
+          )}
+
+          {isAdmin && (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                onDelete(cookie.id);
+              }}
+              className="text-white/15 hover:text-red-400 transition-colors p-1"
+              data-testid={`delete-free-cookie-${globalIndex}`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           )}
         </div>
-        {canFavorite && (
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              onToggleFavorite(cookie.id);
-            }}
-            className={`p-1 transition-all ${
-              isFavorited
-                ? 'text-yellow-400 hover:text-yellow-300'
-                : 'text-white/15 hover:text-yellow-400'
-            }`}
-          >
-            <Star
-              className={`w-3.5 h-3.5 ${
-                isFavorited ? 'fill-yellow-400' : ''
-              }`}
-            />
-          </button>
-        )}
       </div>
 
       <div className="flex items-center gap-2 mb-1.5">
-        <Mail className="w-3.5 h-3.5 text-white/20" />
+        <Mail className="w-3.5 h-3.5 text-white/20 shrink-0" />
         <span className="text-white/70 text-xs font-mono truncate">
           {cookie.email || '—'}
         </span>
       </div>
-
       <div className="flex items-center gap-2 mb-1.5">
-        <CreditCard className="w-3.5 h-3.5 text-white/20" />
+        <CreditCard className="w-3.5 h-3.5 text-white/20 shrink-0" />
         <span className="text-white/40 text-xs">
           {cookie.plan || '—'}
         </span>
       </div>
-
       <div className="flex items-center gap-2">
-        <Globe className="w-3.5 h-3.5 text-white/20" />
+        <Globe className="w-3.5 h-3.5 text-white/20 shrink-0" />
         <span className="text-white/40 text-xs">
           {cookie.country || '—'}
         </span>
       </div>
-
-      <div className="mt-3 pt-2 border-t border-white/5 text-[10px] font-mono text-center tracking-widest text-white/15 group-hover:text-emerald-400 transition-colors duration-200">
+      <div className="mt-3 pt-2 border-t border-white/5 text-[10px] font-mono text-center tracking-widest text-white/15 group-hover:text-green-400 transition-colors duration-200">
         TAP TO USE
       </div>
     </motion.div>
@@ -263,14 +266,13 @@ function FreeCookieCard({
 
 function FreeCookieModal({
   cookie,
-  index,
-  onClose,
-  isPremium,
+  globalIndex,
+  isAdmin,
   canFavorite,
   isFavorited,
   onToggleFavorite,
+  onClose,
 }) {
-  const { token } = useAuth();
   const [tvCode, setTvCode] = useState('');
   const [tvLoading, setTvLoading] = useState(false);
   const [tvResult, setTvResult] = useState(null);
@@ -280,9 +282,10 @@ function FreeCookieModal({
     cookie.nftoken_link,
   );
   const [lastRefreshed, setLastRefreshed] = useState(cookie.last_refreshed);
-
+  const [showCookie, setShowCookie] = useState(false);
+  const [showBrowserCookies, setShowBrowserCookies] = useState(false);
+  const { token } = useAuth();
   const isAlive = cookie.is_alive !== false;
-  const headers = { Authorization: `Bearer ${token}` };
 
   const handleTvCode = async () => {
     if (!tvCode.trim()) {
@@ -294,12 +297,8 @@ function FreeCookieModal({
     try {
       const res = await axios.post(
         `${API}/tv-code`,
-        {
-          code: tvCode,
-          cookie_id: cookie.id,
-          cookie_source: 'free',
-        },
-        { headers },
+        { code: tvCode, cookie_id: cookie.id, cookie_source: 'free' },
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       setTvResult(res.data);
       if (res.data.success) toast.success(res.data.message);
@@ -317,14 +316,14 @@ function FreeCookieModal({
       const res = await axios.post(
         `${API}/free-cookies/${cookie.id}/refresh-token`,
         {},
-        { headers },
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       setCurrentNftoken(res.data.nftoken);
       setCurrentNftokenLink(res.data.nftoken_link);
       setLastRefreshed(new Date().toISOString());
       toast.success('Token refreshed!');
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to refresh token');
+    } catch {
+      toast.error('Failed to refresh token');
     } finally {
       setTokenRefreshing(false);
     }
@@ -345,45 +344,50 @@ function FreeCookieModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 12 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className="relative w-[calc(100vw-2rem)] sm:w-[500px] max-h-[85vh] bg-[#050806] border border-emerald-500/30 rounded-2xl z-10 flex flex-col overflow-hidden shadow-[inset_0_1px_0_rgba(16,185,129,0.2),0_20px_45px_rgba(0,0,0,0.9)]"
+          className="relative w-[calc(100vw-2rem)] sm:w-[500px] max-h-[85vh] bg-[#0a0a0a] border border-white/10 rounded-2xl z-10 flex flex-col overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_24px_48px_rgba(0,0,0,0.8)]"
         >
-          <div className="px-5 py-4 border-b border-emerald-500/25 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3 flex-wrap">
+          <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
               <div
                 className={`w-2 h-2 rounded-full ${
                   isAlive
-                    ? 'bg-emerald-400 shadow-[0_0_6px_rgba(74,222,128,0.6)]'
+                    ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.5)]'
                     : 'bg-red-400'
                 }`}
               />
-              <span className="font-mono text-xs text-white/60">
-                FREE COOKIE #{index + 1}
+              <span className="font-mono text-xs text-white/40">
+                FREE COOKIE #{globalIndex + 1}
               </span>
               <Badge
-                className={`border text-[10px] font-mono px-1.5 ${
+                className={`${
                   isAlive
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
-                    : 'bg-red-500/20 text-red-300 border-red-500/50'
-                }`}
+                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                    : 'bg-red-500/20 text-red-400 border-red-500/30'
+                } border text-[10px] font-mono px-1.5`}
               >
                 {isAlive ? 'ALIVE' : 'DEAD'}
               </Badge>
               {lastRefreshed && (
-                <span className="text-[10px] text-white/40 font-mono flex items-center gap-1">
+                <span className="text-[10px] text-white/15 font-mono flex items-center gap-1">
                   <RefreshCw className="w-2.5 h-2.5" />
                   {new Date(lastRefreshed).toLocaleTimeString()}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               {canFavorite && (
                 <button
                   onClick={() => onToggleFavorite(cookie.id)}
                   className={`p-1.5 rounded-lg transition-all ${
                     isFavorited
                       ? 'text-yellow-400 bg-yellow-400/10 hover:bg-yellow-400/20'
-                      : 'text-white/30 hover:text-yellow-400 hover:bg-yellow-400/10'
+                      : 'text-white/20 hover:text-yellow-400 hover:bg-yellow-400/10'
                   }`}
+                  title={
+                    isFavorited
+                      ? 'Remove from favorites'
+                      : 'Add to favorites'
+                  }
                 >
                   <Star
                     className={`w-4 h-4 ${
@@ -394,7 +398,7 @@ function FreeCookieModal({
               )}
               <button
                 onClick={onClose}
-                className="text-white/40 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5"
+                className="text-white/30 hover:text-white transition-colors p-1"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -420,12 +424,12 @@ function FreeCookieModal({
               />
               <InfoRow
                 icon={<Calendar className="w-4 h-4" />}
-                label="Member Since"
+                label="Since"
                 value={cookie.member_since}
               />
               <InfoRow
                 icon={<Clock className="w-4 h-4" />}
-                label="Next Billing"
+                label="Next Bill"
                 value={cookie.next_billing}
               />
               {cookie.profiles?.length > 0 && (
@@ -438,18 +442,18 @@ function FreeCookieModal({
             </div>
 
             {currentNftoken && (
-              <div className="px-5 py-4 border-t border-white/8 space-y-3">
+              <div className="px-5 py-4 border-t border-white/5 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Key className="w-4 h-4 text-emerald-300/80" />
-                    <span className="text-xs text-white/50 uppercase tracking-wide">
+                    <Key className="w-4 h-4 text-green-400/60" />
+                    <span className="text-xs text-white/40 uppercase tracking-wide">
                       NFToken
                     </span>
                   </div>
                   <button
                     onClick={handleRefreshToken}
                     disabled={tokenRefreshing}
-                    className="flex items-center gap-1 text-[10px] text-white/40 hover:text-emerald-300 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1 text-[10px] text-white/30 hover:text-green-400 transition-colors disabled:opacity-50"
                   >
                     {tokenRefreshing ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -462,10 +466,13 @@ function FreeCookieModal({
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 font-mono text-xs text-emerald-200 bg-black/40 px-3 py-2 rounded-lg truncate">
+                  <code className="flex-1 font-mono text-xs text-green-400/80 bg-black/40 px-3 py-2 rounded-lg truncate">
                     {currentNftoken}
                   </code>
-                  <CopyBtn text={currentNftoken} />
+                  <CopyBtn
+                    text={currentNftoken}
+                    testId={`nftoken-copy-${globalIndex}`}
+                  />
                 </div>
                 {currentNftokenLink && (
                   <div className="flex flex-col sm:flex-row gap-2 pt-1">
@@ -473,7 +480,7 @@ function FreeCookieModal({
                       href={currentNftokenLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-emerald-500/15 text-emerald-200 border border-emerald-500/40 hover:bg-emerald-500/25 transition-all"
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-green-500/15 text-green-400 border border-green-500/30 hover:bg-green-500/25 transition-all"
                     >
                       <Link2 className="w-4 h-4" />
                       Open Netflix
@@ -482,7 +489,7 @@ function FreeCookieModal({
                       href={`https://www.netflix.com/?nftoken=${currentNftoken}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-blue-500/15 text-blue-200 border border-blue-500/40 hover:bg-blue-500/25 transition-all"
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition-all"
                     >
                       <Smartphone className="w-4 h-4" />
                       Open on Phone
@@ -493,10 +500,10 @@ function FreeCookieModal({
             )}
 
             {isAlive && (
-              <div className="px-5 py-4 border-t border-white/8">
+              <div className="px-5 py-4 border-t border-white/5">
                 <div className="flex items-center gap-2 mb-3">
-                  <Tv className="w-4 h-4 text-blue-300/80" />
-                  <span className="text-xs text-white/50 uppercase tracking-wide">
+                  <Tv className="w-4 h-4 text-blue-400/60" />
+                  <span className="text-xs text-white/40 uppercase tracking-wide">
                     Sign In on TV
                   </span>
                 </div>
@@ -528,17 +535,85 @@ function FreeCookieModal({
                   <div
                     className={`mt-2 text-xs px-3 py-2 rounded-xl ${
                       tvResult.success
-                        ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25'
-                        : 'bg-red-500/10 text-red-300 border border-red-500/25'
+                        ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                        : 'bg-red-500/10 text-red-400 border border-red-500/20'
                     }`}
                   >
                     {tvResult.message}
                   </div>
                 )}
-                <p className="text-[10px] text-white/25 mt-2">
-                  Open Netflix on your TV, select "Sign In", then enter the
-                  code here.
+                <p className="text-[10px] text-white/15 mt-2">
+                  Open Netflix on your TV, select "Sign In" and enter the 8-digit
+                  code shown.
                 </p>
+              </div>
+            )}
+
+            {isAdmin && cookie.browser_cookies && (
+              <div className="border-t border-white/5">
+                <button
+                  onClick={() => setShowBrowserCookies(p => !p)}
+                  className="w-full px-5 py-3 flex items-center justify-between text-xs text-green-400/50 hover:text-green-400/80 transition-colors"
+                  data-testid={`free-browser-cookies-expand-${globalIndex}`}
+                >
+                  <span className="font-mono uppercase tracking-wide">
+                    {showBrowserCookies ? 'Hide' : 'View'} Browser Cookies
+                  </span>
+                  <span
+                    className={`transition-transform duration-200 inline-block ${
+                      showBrowserCookies ? 'rotate-180' : ''
+                    }`}
+                  >
+                    ▾
+                  </span>
+                </button>
+                {showBrowserCookies && (
+                  <div className="relative px-5 pb-4">
+                    <pre className="text-xs font-mono text-green-400/60 bg-black/60 rounded-xl p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
+                      {cookie.browser_cookies}
+                    </pre>
+                    <div className="absolute top-2 right-7">
+                      <CopyBtn
+                        text={cookie.browser_cookies}
+                        testId={`free-browser-cookies-copy-${globalIndex}`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isAdmin && cookie.full_cookie && (
+              <div className="border-t border-white/5">
+                <button
+                  onClick={() => setShowCookie(p => !p)}
+                  className="w-full px-5 py-3 flex items-center justify-between text-xs text-white/30 hover:text-white/50 transition-colors"
+                  data-testid={`free-cookie-expand-${globalIndex}`}
+                >
+                  <span className="font-mono uppercase tracking-wide">
+                    {showCookie ? 'Hide' : 'View'} Original Cookie
+                  </span>
+                  <span
+                    className={`transition-transform duration-200 inline-block ${
+                      showCookie ? 'rotate-180' : ''
+                    }`}
+                  >
+                    ▾
+                  </span>
+                </button>
+                {showCookie && (
+                  <div className="relative px-5 pb-4">
+                    <pre className="text-xs font-mono text-white/40 bg-black/60 rounded-xl p-4 overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap break-all">
+                      {cookie.full_cookie}
+                    </pre>
+                    <div className="absolute top-2 right-7">
+                      <CopyBtn
+                        text={cookie.full_cookie}
+                        testId={`free-cookie-copy-${globalIndex}`}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -548,45 +623,38 @@ function FreeCookieModal({
   );
 }
 
-function InfoRow({ icon, label, value }) {
-  if (!value) return null;
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-white/25">{icon}</span>
-      <span className="text-white/40 text-xs uppercase tracking-wide w-24 shrink-0">
-        {label}
-      </span>
-      <span className="text-white/90 text-sm font-medium truncate">
-        {value}
-      </span>
-    </div>
-  );
-}
-
 export default function FreeCookiesPage() {
-  const { token, user } = useAuth();
+  const { user, token } = useAuth();
   const [cookies, setCookies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [pageSize] = useState(24);
+  const [displayLimit, setDisplayLimit] = useState(10);
+  const [limitInput, setLimitInput] = useState('');
+  const [savingLimit, setSavingLimit] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedCookie, setSelectedCookie] = useState(null);
+  const [selectedGlobalIndex, setSelectedGlobalIndex] = useState(null);
   const [filters, setFilters] = useState({
     status: 'all',
     plan: 'all',
     country: 'all',
   });
-  const [selectedCookie, setSelectedCookie] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [allPlanOptions, setAllPlanOptions] = useState(['all']);
+  const [allCountryOptions, setAllCountryOptions] = useState(['all']);
 
-  const [activeTab, setActiveTab] = useState('all');
+  // Favorites state (per key)
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'favorites'
   const [favoriteIds, setFavoriteIds] = useState(new Set());
   const [favoriteCookies, setFavoriteCookies] = useState([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}` };
-  const isMaster = user?.is_master === true;
-  const isPremium = user?.tier === 'premium' && !isMaster;
-  const canFavorite = isMaster || isPremium;
+  const isAdmin = user?.is_master === true;
+  const isPremium = user?.tier === 'premium' && !isAdmin;
+  const canFavorite = isAdmin || isPremium;
+  const pageSize = 20;
 
   const fetchCookies = async (pageParam = 1, filtersParam = filters) => {
     setLoading(true);
@@ -594,23 +662,102 @@ export default function FreeCookiesPage() {
       const params = {
         page: pageParam,
         page_size: pageSize,
+        status: filtersParam.status,
+        plan: filtersParam.plan === 'all' ? '' : filtersParam.plan,
+        country: filtersParam.country === 'all' ? '' : filtersParam.country,
       };
-      if (filtersParam.status !== 'all')
-        params.status = filtersParam.status;
-      if (filtersParam.plan !== 'all') params.plan = filtersParam.plan;
-      if (filtersParam.country !== 'all')
-        params.country = filtersParam.country;
 
       const res = await axios.get(`${API}/free-cookies`, {
         headers,
         params,
       });
-      setCookies(res.data.cookies || []);
-      setTotal(res.data.total || 0);
-    } catch {
+
+      const data = res.data;
+      const list = data.cookies || [];
+      setCookies(list);
+      setTotal(data.total || list.length);
+      setTotalPages(data.total_pages || 1);
+
+      const plans = Array.from(
+        new Set(list.map(c => c.plan).filter(Boolean)),
+      ).sort();
+      const countries = Array.from(
+        new Set(list.map(c => c.country).filter(Boolean)),
+      ).sort();
+      setAllPlanOptions(['all', ...plans]);
+      setAllCountryOptions(['all', ...countries]);
+
+      if (data.display_limit != null) {
+        setDisplayLimit(data.display_limit);
+        setLimitInput(String(data.display_limit));
+      }
+    } catch (err) {
       toast.error('Failed to load free cookies');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveLimit = async () => {
+    const val = parseInt(limitInput, 10);
+    if (Number.isNaN(val) || val <= 0) {
+      toast.error('Enter a valid positive number');
+      return;
+    }
+    setSavingLimit(true);
+    try {
+      const res = await axios.patch(
+        `${API}/admin/free-cookies/limit`,
+        { limit: val },
+        { headers },
+      );
+      toast.success(res.data.message || 'Limit updated');
+      setDisplayLimit(val);
+    } catch (err) {
+      toast.error(
+        err.response?.data?.detail || 'Failed to update free cookies limit',
+      );
+    } finally {
+      setSavingLimit(false);
+    }
+  };
+
+  const refreshTokens = async () => {
+    setRefreshing(true);
+    try {
+      const res = await axios.post(
+        `${API}/admin/free-cookies/refresh`,
+        {},
+        { headers },
+      );
+      toast.success(res.data.message || 'Tokens refreshed');
+      fetchCookies(page, filters);
+    } catch (err) {
+      toast.error(
+        err.response?.data?.detail || 'Failed to refresh free tokens',
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleDeleteFreeCookie = async id => {
+    if (!isAdmin) return;
+    if (!window.confirm('Delete this free cookie?')) return;
+    try {
+      await axios.delete(`${API}/admin/free-cookies/${id}`, { headers });
+      toast.success('Free cookie deleted');
+      setCookies(prev => prev.filter(c => c.id !== id));
+      setFavoriteCookies(prev => prev.filter(c => c.id !== id));
+      setFavoriteIds(prev => {
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
+    } catch (err) {
+      toast.error(
+        err.response?.data?.detail || 'Failed to delete free cookie',
+      );
     }
   };
 
@@ -651,34 +798,30 @@ export default function FreeCookiesPage() {
     }
   }, [activeTab]); // eslint-disable-line
 
-  const handleFilterChange = f => {
-    setFilters(f);
+  const handleFilterApply = newFilters => {
+    setFilters(newFilters);
     setPage(1);
-    fetchCookies(1, f);
+    fetchCookies(1, newFilters);
   };
 
-  const refreshTokens = async () => {
-    setRefreshing(true);
-    try {
-      const res = await axios.post(
-        `${API}/admin/free-cookies/refresh`,
-        {},
-        { headers },
-      );
-      toast.success(res.data.message);
-      fetchCookies(page, filters);
-    } catch {
-      toast.error('Failed to refresh free tokens');
-    } finally {
-      setRefreshing(false);
-    }
-  };
+  // Hide favorites from public list for non-master
+  const publicCookies = useMemo(() => {
+    if (isAdmin) return cookies;
+    return cookies.filter(c => !favoriteIds.has(c.id));
+  }, [cookies, favoriteIds, isAdmin]);
 
   const toggleFavorite = async cookieId => {
     if (!canFavorite) {
       toast.error('Favorites are only for premium and master keys');
       return;
     }
+
+    const isAlreadyFav = favoriteIds.has(cookieId);
+    if (!isAdmin && !isAlreadyFav && favoriteIds.size >= 10) {
+      toast.error('Premium keys can only favorite up to 10 cookies');
+      return;
+    }
+
     try {
       const res = await axios.post(
         `${API}/favorites/${cookieId}`,
@@ -686,9 +829,11 @@ export default function FreeCookiesPage() {
         { headers },
       );
       const newIds = new Set(favoriteIds);
+
       if (res.data.favorited) {
         newIds.add(cookieId);
         toast.success('Added to favorites ★');
+        // remove from public list locally
         setCookies(prev => prev.filter(c => c.id !== cookieId));
       } else {
         newIds.delete(cookieId);
@@ -696,23 +841,24 @@ export default function FreeCookiesPage() {
         if (activeTab === 'favorites') {
           setFavoriteCookies(prev => prev.filter(c => c.id !== cookieId));
         }
+        // refetch public list
         fetchCookies(page, filters);
       }
       setFavoriteIds(newIds);
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Failed to update favorites';
+      const msg =
+        err.response?.data?.detail || 'Failed to update favorites';
       toast.error(msg);
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const handlePageChange = newPage => {
     setPage(newPage);
     fetchCookies(newPage, filters);
   };
 
   const visibleList =
-    activeTab === 'favorites' ? favoriteCookies : cookies;
+    activeTab === 'favorites' ? favoriteCookies : publicCookies;
 
   const selectedIndex = selectedCookie
     ? visibleList.findIndex(c => c.id === selectedCookie.id)
@@ -725,18 +871,34 @@ export default function FreeCookiesPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <div className="flex items-center justify-between mb-10">
-            <div className="flex items-center gap-4">
-              <Cookie className="w-7 h-7 text-emerald-400" />
-              <h1 className="font-bebas text-4xl sm:text-5xl tracking-wider text-white">
-                FREE <span className="text-emerald-400">COOKIES</span>
-              </h1>
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <Gift className="w-7 h-7 text-green-400" />
+              <div>
+                <h1 className="font-bebas text-4xl sm:text-5xl tracking-wider text-white">
+                  FREE <span className="text-green-400">COOKIES</span>
+                </h1>
+                <p className="text-xs text-white/40 mt-1">
+                  Public stock for free users. Premium/master can favorite and
+                  hide cards for themselves.
+                </p>
+              </div>
             </div>
-            {!loading && activeTab === 'all' && (
-              <span className="font-bebas text-lg tracking-widest text-emerald-400">
-                {cookies.length}/{total} COOKIES
-              </span>
-            )}
+            <div className="text-right">
+              <div className="font-bebas text-lg tracking-widest text-green-400">
+                {visibleList.length}/{total} COOKIES
+              </div>
+              {isPremium && (
+                <div className="text-[11px] text-white/40 mt-1">
+                  Favorites: {favoriteIds.size}/10
+                </div>
+              )}
+              {isAdmin && (
+                <div className="text-[11px] text-white/40 mt-1">
+                  MASTER KEY
+                </div>
+              )}
+            </div>
           </div>
         </motion.div>
 
@@ -745,11 +907,11 @@ export default function FreeCookiesPage() {
             onClick={() => setActiveTab('all')}
             className={`flex items-center gap-2 px-4 h-9 rounded-xl text-xs font-mono uppercase tracking-wide border transition-all ${
               activeTab === 'all'
-                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                : 'text-white/30 border-white/8 hover:border-emerald-500/20 hover:text-emerald-400/60'
+                ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                : 'text-white/30 border-white/8 hover:border-green-500/20 hover:text-green-400/60'
             }`}
           >
-            <Cookie className="w-3.5 h-3.5" />
+            <Gift className="w-3.5 h-3.5" />
             All Free
           </button>
           {canFavorite && (
@@ -768,13 +930,7 @@ export default function FreeCookiesPage() {
               />
               Favorites
               {favoriteIds.size > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
-                    activeTab === 'favorites'
-                      ? 'bg-yellow-400/20 text-yellow-200'
-                      : 'bg-white/10 text-white/30'
-                  }`}
-                >
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-white/10 text-white/40">
                   {favoriteIds.size}
                 </span>
               )}
@@ -782,135 +938,159 @@ export default function FreeCookiesPage() {
           )}
         </div>
 
-        {/* GREEN CONTROL CARD (master only, like screenshot) */}
-        {isMaster && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="bg-gradient-to-b from-emerald-500/10 to-black border border-emerald-500/30 rounded-2xl p-6 mb-8 shadow-[inset_0_1px_0_rgba(16,185,129,0.25),0_12px_30px_rgba(0,0,0,0.8)]"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <RefreshCw className="w-4 h-4 text-white/70" />
-              <h2 className="font-bebas text-lg tracking-wider text-white">
-                FREE COOKIES CONTROL
-              </h2>
+        {/* Admin control card */}
+        {isAdmin && (
+          <div className="bg-gradient-to-b from-green-500/10 to-black border border-green-500/30 rounded-2xl p-5 mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Settings className="w-4 h-4 text-white/60" />
+                <h2 className="font-bebas text-lg tracking-wider text-white">
+                  FREE COOKIES CONTROL
+                </h2>
+              </div>
+              <p className="text-xs text-white/40 mb-2">
+                Control how many free cookies are visible to non-premium users,
+                and refresh NFToken for all free cookies.
+              </p>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-white/50">
+                  Current limit:{' '}
+                  <span className="font-mono text-green-400">
+                    {displayLimit}
+                  </span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    className="w-16 h-8 bg-black/60 border border-white/15 text-xs text-white px-2"
+                    value={limitInput}
+                    onChange={e => setLimitInput(e.target.value)}
+                    placeholder={String(displayLimit)}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={saveLimit}
+                    disabled={savingLimit}
+                    className="h-8 px-3 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-100 border border-green-500/40"
+                  >
+                    {savingLimit ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      'Set'
+                    )}
+                  </Button>
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-white/40 mb-4">
-              Visible to everyone, but favorites from premium/master users will
-              temporarily hide them from free and other premium keys.
-            </p>
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-col items-start md:items-end gap-2">
               <Button
                 onClick={refreshTokens}
-                disabled={refreshing || cookies.length === 0}
-                className="bg-emerald-500/20 text-emerald-100 border border-emerald-500/40 hover:bg-emerald-500/30 font-bebas tracking-widest uppercase rounded-xl h-10 px-6"
+                disabled={refreshing}
+                className="bg-green-500/20 hover:bg-green-500/30 text-green-100 border border-green-500/40 h-9 px-4 text-xs font-bebas tracking-widest uppercase flex items-center gap-2"
               >
                 {refreshing ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <RefreshCw className="w-4 h-4 mr-2" />
+                  <RefreshCw className="w-4 h-4" />
                 )}
-                REFRESH TOKENS NOW
+                REFRESH TOKENS
               </Button>
-              <span className="text-xs text-white/40">
-                Force-refresh NFTokens for all free cookies
+              <span className="text-[11px] text-white/40">
+                This will try to re-generate NFToken for all free cookies.
               </span>
             </div>
-          </motion.div>
+          </div>
         )}
 
         {activeTab === 'favorites' && canFavorite ? (
-          <>
-            {favoritesLoading ? (
-              <div className="text-center py-20">
-                <Loader2 className="w-8 h-8 text-yellow-400 animate-spin mx-auto" />
-              </div>
-            ) : favoriteCookies.length === 0 ? (
-              <div className="text-center py-20 text-white/30">
-                <Star className="w-10 h-10 mx-auto mb-3 text-white/10" />
-                <p>No favorites yet</p>
-                <p className="text-xs text-white/20 mt-1">
-                  Tap the ★ on any free cookie to save it here.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {favoriteCookies.map((cookie, idx) => (
-                  <FreeCookieCard
-                    key={cookie.id}
-                    cookie={cookie}
-                    index={idx}
-                    isPremium={isPremium}
-                    canFavorite={canFavorite}
-                    isFavorited={favoriteIds.has(cookie.id)}
-                    onToggleFavorite={toggleFavorite}
-                    onClick={() => setSelectedCookie(cookie)}
-                  />
-                ))}
-              </div>
-            )}
-          </>
+          favoritesLoading ? (
+            <div className="text-center py-16">
+              <Loader2 className="w-8 h-8 text-yellow-400 animate-spin mx-auto" />
+            </div>
+          ) : favoriteCookies.length === 0 ? (
+            <div className="text-center py-16 text-white/40">
+              <Star className="w-10 h-10 mx-auto mb-2 text-white/20" />
+              <p>No favorites yet.</p>
+              <p className="text-xs text-white/30 mt-1">
+                Tap the star on any free cookie to add it here.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {favoriteCookies.map((cookie, idx) => (
+                <FreeCookieSmallCard
+                  key={cookie.id}
+                  cookie={cookie}
+                  globalIndex={idx}
+                  isAdmin={isAdmin}
+                  canFavorite={canFavorite}
+                  isFavorited={favoriteIds.has(cookie.id)}
+                  onDelete={handleDeleteFreeCookie}
+                  onClick={() => {
+                    setSelectedCookie(cookie);
+                    setSelectedGlobalIndex(idx);
+                  }}
+                  onToggleFavorite={toggleFavorite}
+                />
+              ))}
+            </div>
+          )
         ) : loading ? (
-          <div className="text-center py-20">
-            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin mx-auto" />
+          <div className="text-center py-16">
+            <Loader2 className="w-8 h-8 text-green-400 animate-spin mx-auto" />
           </div>
-        ) : cookies.length === 0 ? (
-          <div className="text-center py-16 text-white/30">
-            <Cookie className="w-10 h-10 mx-auto mb-3 text-white/10" />
-            <p>No free cookies available</p>
+        ) : publicCookies.length === 0 ? (
+          <div className="text-center py-16 text-white/40">
+            <Gift className="w-10 h-10 mx-auto mb-2 text-white/20" />
+            <p>No free cookies available.</p>
           </div>
         ) : (
           <>
             <FilterBar
-              cookies={cookies}
               filters={filters}
-              onChange={handleFilterChange}
+              setFilters={handleFilterApply}
+              planOptions={allPlanOptions}
+              countryOptions={allCountryOptions}
             />
-            {cookies.length === 0 ? (
-              <div className="text-center py-16 text-white/30">
-                <Filter className="w-10 h-10 mx-auto mb-3 text-white/10" />
-                <p>No cookies match your filters</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {publicCookies.map((cookie, idx) => (
+                <FreeCookieSmallCard
+                  key={cookie.id}
+                  cookie={cookie}
+                  globalIndex={(page - 1) * pageSize + idx}
+                  isAdmin={isAdmin}
+                  canFavorite={canFavorite}
+                  isFavorited={favoriteIds.has(cookie.id)}
+                  onDelete={handleDeleteFreeCookie}
+                  onClick={() => {
+                    setSelectedCookie(cookie);
+                    setSelectedGlobalIndex(
+                      (page - 1) * pageSize + idx,
+                    );
+                  }}
+                  onToggleFavorite={toggleFavorite}
+                />
+              ))}
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 mt-8">
+                <button
+                  disabled={page === 1}
+                  onClick={() => handlePageChange(page - 1)}
+                  className="text-xs text-white/40 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                <span className="text-xs text-white/40 font-mono">
+                  Page {page} of {totalPages}
+                </span>
+                <button
+                  disabled={page === totalPages}
+                  onClick={() => handlePageChange(page + 1)}
+                  className="text-xs text-white/40 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
               </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {cookies.map((cookie, idx) => (
-                    <FreeCookieCard
-                      key={cookie.id}
-                      cookie={cookie}
-                      index={idx}
-                      isPremium={isPremium}
-                      canFavorite={canFavorite}
-                      isFavorited={favoriteIds.has(cookie.id)}
-                      onToggleFavorite={toggleFavorite}
-                      onClick={() => setSelectedCookie(cookie)}
-                    />
-                  ))}
-                </div>
-
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-3 mt-8">
-                    <button
-                      disabled={page === 1}
-                      onClick={() => handlePageChange(page - 1)}
-                      className="text-xs text-white/40 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      Prev
-                    </button>
-                    <span className="text-xs text-white/40 font-mono">
-                      Page {page} of {totalPages}
-                    </span>
-                    <button
-                      disabled={page === totalPages}
-                      onClick={() => handlePageChange(page + 1)}
-                      className="text-xs text-white/40 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
-              </>
             )}
           </>
         )}
@@ -918,12 +1098,15 @@ export default function FreeCookiesPage() {
         {selectedCookie && (
           <FreeCookieModal
             cookie={selectedCookie}
-            index={selectedIndex >= 0 ? selectedIndex : 0}
-            isPremium={isPremium}
+            globalIndex={selectedGlobalIndex ?? 0}
+            isAdmin={isAdmin}
             canFavorite={canFavorite}
             isFavorited={favoriteIds.has(selectedCookie.id)}
             onToggleFavorite={toggleFavorite}
-            onClose={() => setSelectedCookie(null)}
+            onClose={() => {
+              setSelectedCookie(null);
+              setSelectedGlobalIndex(null);
+            }}
           />
         )}
       </div>
