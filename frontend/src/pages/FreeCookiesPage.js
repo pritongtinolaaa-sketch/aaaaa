@@ -622,11 +622,17 @@ export default function FreeCookiesPage() {
     fetchCookies(newPage, filters);
   };
 
-  const handleFilterApply = newFilters => {
-    setFilters(newFilters);
-    handlePageChange(1);
+  const handlePageChange = (newPage, filtersParam = filters) => {
+    setPage(newPage);
+    fetchCookies(newPage, filtersParam);
   };
 
+  // filter apply helper, used by FilterBar
+  const handleFilterApply = newFilters => {
+    setFilters(newFilters);
+    handlePageChange(1, newFilters);
+  };
+  
   const handlePageJump = () => {
     const parsed = Number.parseInt(pageInput, 10);
     if (Number.isNaN(parsed)) {
