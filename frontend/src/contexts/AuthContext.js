@@ -29,9 +29,13 @@ export function AuthProvider({ children }) {
   useEffect(() => { validateToken(); }, [validateToken]);
 
   const login = async (key) => {
+    // Trim and strip hidden zero-width chars commonly introduced by copy/paste.
+    const normalizedKey = String(key || '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim();
     const res = await axios.post(
       `${API}/auth/login`,
-      { key },
+      { key: normalizedKey },
       { timeout: 15000 },
     );
     localStorage.setItem('schiro_token', res.data.token);

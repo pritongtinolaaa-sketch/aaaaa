@@ -22,7 +22,13 @@ export default function AuthPage() {
       toast.success('Access granted');
       navigate('/');
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Invalid key');
+      if (err.code === 'ECONNABORTED') {
+        toast.error('Login timed out. Please try again.');
+      } else if (!err.response) {
+        toast.error('Cannot reach server. Check backend URL/network.');
+      } else {
+        toast.error(err.response?.data?.detail || 'Login failed');
+      }
     } finally {
       setSubmitting(false);
     }

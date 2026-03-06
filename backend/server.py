@@ -723,8 +723,12 @@ async def ping():
 # --- Auth Routes ---
 @api_router.post("/auth/login")
 async def login(data: KeyLogin):
+    submitted_key = re.sub(r'[\u200B-\u200D\uFEFF]', '', (data.key or '')).strip()
+    if not submitted_key:
+        raise HTTPException(status_code=401, detail="Invalid access key")
+
     key_doc = await db.access_keys.find_one(
-        {"key_value": data.key},
+        {"key_value": submitted_key},
         {
             "_id": 0,
             "id": 1,
