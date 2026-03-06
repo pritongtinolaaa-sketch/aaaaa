@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { LayoutDashboard, LogOut, KeyRound, ScrollText, Gift, Menu, X, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, LogOut, KeyRound, ScrollText, Cookie, Menu, X, ShieldCheck } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logout, isMaster, isPremium } = useAuth();
@@ -55,7 +55,7 @@ export default function Navbar() {
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-1">
           <NavLink to="/" icon={LayoutDashboard} label="Dashboard" testId="nav-dashboard-link" />
-          <NavLink to="/free-cookies" icon={Gift} label="Free Cookies" testId="nav-free-cookies-link" inactiveClass="text-green-400/70 hover:text-green-400" />
+          <NavLink to="/free-cookies" icon={Cookie} label="Free Cookies" testId="nav-free-cookies-link" inactiveClass="text-green-400/70 hover:text-green-400" />
 
           {(isMaster || isPremium) && (
             <NavLink to="/admin/cookies" icon={ShieldCheck} label="Admin Cookies" testId="nav-admin-cookies-link" inactiveClass="text-purple-400/70 hover:text-purple-400" />
@@ -96,7 +96,7 @@ export default function Navbar() {
         <div className="md:hidden border-t border-white/5 bg-black/95 backdrop-blur-xl" data-testid="nav-mobile-menu">
           <div className="px-4 py-3 space-y-1">
             <NavLink to="/" icon={LayoutDashboard} label="Dashboard" testId="nav-dashboard-link-mobile" />
-            <NavLink to="/free-cookies" icon={Gift} label="Free Cookies" testId="nav-free-cookies-link-mobile" inactiveClass="text-green-400/70 hover:text-green-400" />
+            <NavLink to="/free-cookies" icon={Cookie} label="Free Cookies" testId="nav-free-cookies-link-mobile" inactiveClass="text-green-400/70 hover:text-green-400" />
 
             {(isMaster || isPremium) && (
               <NavLink to="/admin/cookies" icon={ShieldCheck} label="Admin Cookies" testId="nav-admin-cookies-link-mobile" inactiveClass="text-purple-400/70 hover:text-purple-400" />
