@@ -1105,38 +1105,6 @@ async def set_free_cookies_limit(data: FreeCookieLimitUpdate, user: dict = Depen
     )
     return {"message": "Limit updated", "limit": data.limit}
 
-# --- Hidden IDs helper for listings ---
-async def get_hidden_cookie_ids_for_user(user: dict):
-    """
-    IDs that should be hidden from this user in public listings.
-    - Master: sees all (return empty set).
-    - Premium/free: hide cookies whose hidden_by contains any other key.
-    """
-    if user.get("is_master"):
-        return set()
-
-    hidden_ids = set()
-
-    cursor_free = db.free_cookies.find(
-        {"hidden_by": {"$exists": True, "$ne": []}},
-        {"_id": 0, "id": 1, "hidden_by": 1}
-    )
-    async for doc in cursor_free:
-        hb = set(doc.get("hidden_by", []))
-        if hb and (hb - {user["id"]}):
-            hidden_ids.add(doc["id"])
-
-    cursor_admin = db.admin_cookies.find(
-        {"hidden_by": {"$exists": True, "$ne": []}},
-        {"_id": 0, "id": 1, "hidden_by": 1}
-    )
-    async for doc in cursor_admin:
-        hb = set(doc.get("hidden_by", []))
-        if hb and (hb - {user["id"]}):
-            hidden_ids.add(doc["id"])
-
-    return hidden_ids
-
 @api_router.get("/free-cookies")
 async def get_free_cookies(
     user: dict = Depends(get_current_user),
@@ -1517,85 +1485,6 @@ async def refresh_single_admin_cookie_token(cookie_id: str, user: dict = Depends
             {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
         )
         raise HTTPException(status_code=400, detail=nft_err or "Failed to generate token — cookie may be dead")
-
-# --- Favorites Routes (Premium/Master only) ---
-@api_router.post("/favorites/{cookie_id}")
-async def toggle_favorite(cookie_id: str, user: dict = Depends(require_admin_or_premium)):
-    key_doc = await db.access_keys.find_one({"id": user["id"]}, {"_id": 0})
-    if not key_doc:
-        raise HTTPException(status_code=404, detail="Key not found")
-
-    favorites = key_doc.get("favorites", [])
-
-    # already favorited -> un-favorite and remove from hidden_by
-    if cookie_id in favorites:
-        await db.access_keys.update_one(
-            {"id": user["id"]},
-            {"$pull": {"favorites": cookie_id}}
-        )
-        await db.free_cookies.update_one(
-            {"id": cookie_id},
-            {"$pull": {"hidden_by": user["id"]}}
-        )
-        await db.admin_cookies.update_one(
-            {"id": cookie_id},
-            {"$pull": {"hidden_by": user["id"]}}
-        )
-        return {"favorited": False, "message": "Removed from favorites"}
-
-    # new favorite: enforce premium 10‑limit (master unlimited)
-    if not user.get("is_master") and key_doc.get("tier") == "premium":
-        current_count = len(favorites)
-        if current_count >= 10:
-            raise HTTPException(
-                status_code=400,
-                detail="Premium keys can favorite at most 10 cookies"
-            )
-
-    await db.access_keys.update_one(
-        {"id": user["id"]},
-        {"$addToSet": {"favorites": cookie_id}}
-    )
-    await db.free_cookies.update_one(
-        {"id": cookie_id},
-        {"$addToSet": {"hidden_by": user["id"]}}
-    )
-    await db.admin_cookies.update_one(
-        {"id": cookie_id},
-        {"$addToSet": {"hidden_by": user["id"]}}
-    )
-
-    return {"favorited": True, "message": "Added to favorites"}
-
-@api_router.get("/favorites/ids")
-async def get_favorite_ids(user: dict = Depends(require_admin_or_premium)):
-    key_doc = await db.access_keys.find_one({"id": user["id"]}, {"_id": 0})
-    if not key_doc:
-        return {"favorites": []}
-    return {"favorites": key_doc.get("favorites", [])}
-
-@api_router.get("/favorites")
-async def get_favorites(user: dict = Depends(require_admin_or_premium)):
-    key_doc = await db.access_keys.find_one({"id": user["id"]}, {"_id": 0})
-    if not key_doc:
-        return {"cookies": []}
-    favorite_ids = key_doc.get("favorites", [])
-    if not favorite_ids:
-        return {"cookies": []}
-    free_cookies = await db.free_cookies.find(
-        {"id": {"$in": favorite_ids}}, {"_id": 0}
-    ).to_list(500)
-    admin_cookies = await db.admin_cookies.find(
-        {"id": {"$in": favorite_ids}}, {"_id": 0}
-    ).to_list(500)
-    for c in free_cookies:
-        c["source"] = "free"
-        if not user.get("is_master"):
-            c.pop("browser_cookies", None)
-    for c in admin_cookies:
-        c["source"] = "admin"
-    all_cookies = free_cookies + admin_cookies
-    return {"cookies": all_cookies}
 
 # --- Admin: see all hidden cookies and who hid them ---
 @api_router.get("/admin/hidden-cookies")
