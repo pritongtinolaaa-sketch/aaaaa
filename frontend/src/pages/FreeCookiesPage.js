@@ -32,6 +32,15 @@ import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+function stableIndexFromId(id) {
+  const str = String(id || '');
+  let hash = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    hash = (hash * 31 + str.charCodeAt(i)) % 100000;
+  }
+  return hash;
+}
+
 function CopyBtn({ text, testId }) {
   const [copied, setCopied] = useState(false);
 
@@ -194,7 +203,7 @@ function FreeCookieSmallCard({
       data-testid={`free-cookie-card-${globalIndex}`}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: (globalIndex % 21) * 0.04 }}
+      transition={{ delay: (Number(globalIndex) % 21) * 0.04 }}
       onClick={onClick}
       className={`group cursor-pointer rounded-xl p-4 transition-all duration-150
         bg-gradient-to-b from-white/10 to-white/[0.03]
@@ -215,7 +224,7 @@ function FreeCookieSmallCard({
             }`}
           />
           <span className="font-mono text-xs text-white/30">
-            #{globalIndex + 1}
+            #{Number(globalIndex) + 1}
           </span>
         </div>
 
@@ -405,7 +414,7 @@ function FreeCookieModal({
                 }`}
               />
               <span className="font-mono text-xs text-white/40">
-                {sourceLabel} COOKIE #{globalIndex + 1}
+                {sourceLabel} COOKIE #{Number(globalIndex) + 1}
               </span>
 
               <Badge
@@ -853,7 +862,9 @@ export default function FreeCookiesPage() {
       await axios.delete(endpoint, { headers });
 
       toast.success(
-        cookieSource === 'admin' ? 'Admin cookie deleted' : 'Free cookie deleted',
+        cookieSource === 'admin'
+          ? 'Admin cookie deleted'
+          : 'Free cookie deleted',
       );
 
       setCookies(prev => prev.filter(c => c.id !== cookieId));
@@ -909,9 +920,8 @@ export default function FreeCookiesPage() {
       }));
 
       if (isAdmin) {
-        const myId = user?.id;
-        const mine = all.filter(c => c.hidden_by === myId);
-        const others = all.filter(c => c.hidden_by && c.hidden_by !== myId);
+        const mine = all.filter(c => c.is_mine === true);
+        const others = all.filter(c => c.is_mine !== true);
 
         setFavoriteCookiesMaster(mine);
         setFavoriteCookiesOthers(others);
@@ -975,24 +985,17 @@ export default function FreeCookiesPage() {
       if (res.data.favorited) {
         newIds.add(cookieId);
         toast.success('Added to favorites ★');
-        setCookies(prev => prev.filter(c => c.id !== cookieId));
       } else {
         newIds.delete(cookieId);
         toast.success('Removed from favorites');
-
-        if (activeTab === 'favorites') {
-          setFavoriteCookiesMaster(prev =>
-            prev.filter(c => c.id !== cookieId),
-          );
-          setFavoriteCookiesOthers(prev =>
-            prev.filter(c => c.id !== cookieId),
-          );
-        } else {
-          fetchCookies(page, filters);
-        }
       }
 
       setFavoriteIds(newIds);
+
+      await fetchCookies(page, filters);
+      if (activeTab === 'favorites') {
+        await fetchFavorites();
+      }
     } catch (err) {
       const msg = err.response?.data?.detail || 'Failed to update favorites';
       toast.error(msg);
@@ -1191,18 +1194,18 @@ export default function FreeCookiesPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {favoriteCookiesMaster.map((cookie, idx) => (
+                {favoriteCookiesMaster.map(cookie => (
                   <FreeCookieSmallCard
                     key={`${cookie.source || 'free'}-${cookie.id}`}
                     cookie={cookie}
-                    globalIndex={idx}
+                    globalIndex={stableIndexFromId(cookie.id)}
                     isAdmin={isAdmin}
                     canFavorite={canFavorite}
                     isFavorited={favoriteIds.has(cookie.id)}
                     onDelete={handleDeleteCookie}
                     onClick={() => {
                       setSelectedCookie(cookie);
-                      setSelectedGlobalIndex(idx);
+                      setSelectedGlobalIndex(stableIndexFromId(cookie.id));
                     }}
                     onToggleFavorite={toggleFavorite}
                     isMasterFavoritesView={false}
@@ -1223,18 +1226,18 @@ export default function FreeCookiesPage() {
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                  {favoriteCookiesMaster.map((cookie, idx) => (
+                  {favoriteCookiesMaster.map(cookie => (
                     <FreeCookieSmallCard
                       key={`${cookie.source || 'free'}-${cookie.id}`}
                       cookie={cookie}
-                      globalIndex={idx}
+                      globalIndex={stableIndexFromId(cookie.id)}
                       isAdmin={isAdmin}
                       canFavorite={canFavorite}
                       isFavorited={favoriteIds.has(cookie.id)}
                       onDelete={handleDeleteCookie}
                       onClick={() => {
                         setSelectedCookie(cookie);
-                        setSelectedGlobalIndex(idx);
+                        setSelectedGlobalIndex(stableIndexFromId(cookie.id));
                       }}
                       onToggleFavorite={toggleFavorite}
                       isMasterFavoritesView={true}
@@ -1256,18 +1259,18 @@ export default function FreeCookiesPage() {
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {favoriteCookiesOthers.map((cookie, idx) => (
+                  {favoriteCookiesOthers.map(cookie => (
                     <FreeCookieSmallCard
                       key={`${cookie.source || 'free'}-${cookie.id}`}
                       cookie={cookie}
-                      globalIndex={idx}
+                      globalIndex={stableIndexFromId(cookie.id)}
                       isAdmin={isAdmin}
                       canFavorite={canFavorite}
                       isFavorited={favoriteIds.has(cookie.id)}
                       onDelete={handleDeleteCookie}
                       onClick={() => {
                         setSelectedCookie(cookie);
-                        setSelectedGlobalIndex(idx);
+                        setSelectedGlobalIndex(stableIndexFromId(cookie.id));
                       }}
                       onToggleFavorite={toggleFavorite}
                       isMasterFavoritesView={true}
