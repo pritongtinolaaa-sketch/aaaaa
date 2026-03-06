@@ -16,6 +16,7 @@ const DEFAULT_GUIDE = {
 export default function HomeDashboardPage() {
   const { token, user } = useAuth();
   const [counts, setCounts] = useState({ free: 0, admin: 0, total: 0 });
+  const [grandTotal, setGrandTotal] = useState({ free: 0, admin: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [noticeText, setNoticeText] = useState('');
   const [isEditingNotice, setIsEditingNotice] = useState(false);
@@ -40,8 +41,10 @@ export default function HomeDashboardPage() {
         const adminReq = canAccessAdmin
           ? axios.get(`${API}/admin/admin-cookies`, { headers })
           : Promise.resolve({ data: { cookies: [] } });
+        const grandTotalReq = axios.get(`${API}/cookies/total-count`, { headers });
 
-        const [freeRes, adminRes] = await Promise.all([freeReq, adminReq]);
+        const [freeRes, adminRes, grandTotalRes] = await Promise.all([freeReq, adminReq, grandTotalReq]);
+
         const freeCount = Number(
           freeRes.data?.total ?? freeRes.data?.cookies?.length ?? 0,
         );
@@ -53,6 +56,12 @@ export default function HomeDashboardPage() {
           free: freeCount,
           admin: adminCount,
           total: freeCount + adminCount,
+        });
+
+        setGrandTotal({
+          free: grandTotalRes.data?.free ?? 0,
+          admin: grandTotalRes.data?.admin ?? 0,
+          total: grandTotalRes.data?.total ?? 0,
         });
       } catch {
         toast.error('Failed to load dashboard stats');
@@ -175,11 +184,11 @@ export default function HomeDashboardPage() {
                         <div className="mt-3 pt-3 border-t border-white/10 space-y-1">
                           <p className="text-xs font-mono text-white/40">
                             Free tier cookies:{' '}
-                            <span className="text-green-400">{counts.free}</span>
+                            <span className="text-green-400">{grandTotal.free}</span>
                           </p>
                           <p className="text-xs font-mono text-white/40">
                             Premium cookies:{' '}
-                            <span className="text-purple-400">{counts.free + counts.admin}</span>
+                            <span className="text-purple-400">{grandTotal.total}</span>
                           </p>
                         </div>
                       )}
