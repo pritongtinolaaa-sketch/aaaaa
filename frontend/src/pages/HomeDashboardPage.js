@@ -179,19 +179,20 @@ export default function HomeDashboardPage() {
                         Free: {counts.free}{canAccessAdmin ? ` | Admin: ${counts.admin}` : ''}
                       </p>
 
-                      {/* Upgrade nudge — free tier only */}
-                      {!canAccessAdmin && (
-                        <div className="mt-3 pt-3 border-t border-white/10 space-y-1">
-                          <p className="text-xs font-mono text-white/40">
-                            Free tier cookies:{' '}
-                            <span className="text-green-400">{grandTotal.free}</span>
-                          </p>
-                          <p className="text-xs font-mono text-white/40">
-                            Premium cookies:{' '}
-                            <span className="text-purple-400">{grandTotal.total}</span>
-                          </p>
-                        </div>
-                      )}
+                  {/* Upgrade nudge — free tier only */}
+                  {!canAccessAdmin && (
+                    <div className="mt-3 pt-3 border-t border-white/10 space-y-1">
+                      <p className="text-xs font-mono text-white/40">
+                        Free tier cookies:{' '}
+                        <span className="text-green-400">30</span>
+                      </p>
+                      <p className="text-xs font-mono text-white/40">
+                        Premium cookies:{' '}
+                        <span className="text-purple-400">{grandTotal.total}</span>
+                      </p>
+                    </div>
+                  )}
+
                     </>
                   )}
                 </div>
