@@ -618,11 +618,10 @@ export default function FreeCookiesPage() {
     setPageInput(String(page));
   }, [page]);
 
-  // NEW: central filter apply helper, used by FilterBar
+  // central filter apply helper, used by FilterBar
   const handleFilterApply = newFilters => {
     setFilters(newFilters);
-    setPage(1);
-    fetchCookies(1, newFilters);
+    handlePageChange(1); // this sets page to 1 and calls fetchCookies(1, filters)
   };
 
   const publicCookies = useMemo(() => {
