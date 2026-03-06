@@ -19,7 +19,7 @@ export default function Navbar() {
       </span>
     );
     if (isPremium) return (
-      <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-purple-500/20 text-purple-400 border border-purple-500/30">
+      <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-600/35 via-violet-500/30 to-purple-600/35 text-purple-200 border border-purple-300/40 ring-1 ring-purple-400/25 shadow-[0_0_8px_rgba(168,85,247,0.35),inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_1px_rgba(46,16,101,0.3)]">
         PREMIUM
       </span>
     );
