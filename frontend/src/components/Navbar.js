@@ -14,7 +14,7 @@ export default function Navbar() {
 
   const TierBadge = () => {
     if (isMaster) return (
-      <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-gradient-to-r from-red-500/40 via-red-400/35 to-red-500/40 text-red-100 border border-red-300/60 shadow-[0_0_10px_rgba(239,68,68,0.75),inset_0_1px_0_rgba(255,255,255,0.25)]">
+      <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-300 via-yellow-100 to-amber-300 text-amber-950 border border-yellow-100/90 ring-1 ring-amber-200/60 shadow-[0_0_14px_rgba(251,191,36,0.9),0_0_26px_rgba(245,158,11,0.55),inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_1px_rgba(146,64,14,0.35)]">
         MASTER
       </span>
     );
