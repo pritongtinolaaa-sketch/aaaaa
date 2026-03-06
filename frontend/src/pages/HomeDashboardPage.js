@@ -187,7 +187,7 @@ export default function HomeDashboardPage() {
                         <span className="text-green-400">30</span>
                       </p>
                       <p className="text-xs font-mono text-white/40">
-                        Premium cookies:{' '}
+                        Premium Tier cookies:{' '}
                         <span className="text-purple-400">{grandTotal.total}</span>
                       </p>
                     </div>
