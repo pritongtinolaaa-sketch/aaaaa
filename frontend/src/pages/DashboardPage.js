@@ -191,7 +191,7 @@ export default function DashboardPage() {
               <h1 className="font-bebas text-4xl sm:text-5xl lg:text-6xl tracking-wider text-white" data-testid="dashboard-title">
                 COOKIE <span className="text-primary">CHECKER</span>
               </h1>
-              <p className="text-white/40 mt-2 text-sm md:text-base max-w-lg mx-auto">
+              <p className="text-white/40 mt-2 text-sm md:text-base mx-auto whitespace-nowrap">
                 Paste or upload Netflix cookies to validate accounts and extract details.
               </p>
             </div>
