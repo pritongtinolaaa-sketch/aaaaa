@@ -662,6 +662,7 @@ export default function FreeCookiesPage() {
     country: 'all',
   });
   const [page, setPage] = useState(1);
+  const [pageInput, setPageInput] = useState('1');
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [allPlanOptions, setAllPlanOptions] = useState(['all']);
@@ -879,6 +880,10 @@ export default function FreeCookiesPage() {
     }
   }, [activeTab]); // eslint-disable-line
 
+  useEffect(() => {
+    setPageInput(String(page));
+  }, [page]);
+
   const handleFilterApply = newFilters => {
     setFilters(newFilters);
     setPage(1);
@@ -938,6 +943,17 @@ export default function FreeCookiesPage() {
   const handlePageChange = newPage => {
     setPage(newPage);
     fetchCookies(newPage, filters);
+  };
+
+  const handlePageJump = () => {
+    const parsed = Number.parseInt(pageInput, 10);
+    if (Number.isNaN(parsed)) {
+      setPageInput(String(page));
+      return;
+    }
+    const nextPage = Math.min(totalPages, Math.max(1, parsed));
+    handlePageChange(nextPage);
+    setPageInput(String(nextPage));
   };
 
   const visibleList =
@@ -1236,6 +1252,21 @@ export default function FreeCookiesPage() {
                 <span className="text-xs text-white/40 font-mono">
                   Page {page} of {totalPages}
                 </span>
+                <div className="flex items-center gap-1">
+                  <input
+                    value={pageInput}
+                    onChange={e => setPageInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handlePageJump()}
+                    className="w-14 h-7 bg-black/60 border border-white/15 rounded-md px-2 text-xs text-white/70 outline-none focus:border-green-500/40"
+                    inputMode="numeric"
+                  />
+                  <button
+                    onClick={handlePageJump}
+                    className="h-7 px-2 rounded-md border border-white/15 text-[10px] font-mono text-white/50 hover:text-white hover:border-green-500/30 transition-colors"
+                  >
+                    Go
+                  </button>
+                </div>
                 <button
                   disabled={page === totalPages}
                   onClick={() => handlePageChange(page + 1)}

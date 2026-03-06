@@ -724,6 +724,7 @@ export default function AdminCookiesPage() {
   const [favoritesLoading, setFavoritesLoading] = useState(false);
 
   const [page, setPage] = useState(1);
+  const [pageInput, setPageInput] = useState('1');
   const pageSize = 21;
 
   const headers = { Authorization: `Bearer ${token}` };
@@ -829,6 +830,21 @@ export default function AdminCookiesPage() {
       : publicCookies.length;
 
   const totalPages = Math.max(1, Math.ceil(totalForTab / pageSize));
+
+  useEffect(() => {
+    setPageInput(String(page));
+  }, [page]);
+
+  const handlePageJump = () => {
+    const parsed = Number.parseInt(pageInput, 10);
+    if (Number.isNaN(parsed)) {
+      setPageInput(String(page));
+      return;
+    }
+    const nextPage = Math.min(totalPages, Math.max(1, parsed));
+    setPage(nextPage);
+    setPageInput(String(nextPage));
+  };
 
   const pagedCookies = useMemo(() => {
     const list =
@@ -1199,6 +1215,21 @@ export default function AdminCookiesPage() {
                   <span className="text-xs text-white/40 font-mono">
                     Page {page} of {totalPages}
                   </span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      value={pageInput}
+                      onChange={e => setPageInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handlePageJump()}
+                      className="w-14 h-7 bg-black/60 border border-white/15 rounded-md px-2 text-xs text-white/70 outline-none focus:border-purple-500/40"
+                      inputMode="numeric"
+                    />
+                    <button
+                      onClick={handlePageJump}
+                      className="h-7 px-2 rounded-md border border-white/15 text-[10px] font-mono text-white/50 hover:text-white hover:border-purple-500/30 transition-colors"
+                    >
+                      Go
+                    </button>
+                  </div>
                   <button
                     disabled={page === totalPages}
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
@@ -1278,6 +1309,21 @@ export default function AdminCookiesPage() {
                     <span className="text-xs text-white/40 font-mono">
                       Page {page} of {totalPages}
                     </span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        value={pageInput}
+                        onChange={e => setPageInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handlePageJump()}
+                        className="w-14 h-7 bg-black/60 border border-white/15 rounded-md px-2 text-xs text-white/70 outline-none focus:border-purple-500/40"
+                        inputMode="numeric"
+                      />
+                      <button
+                        onClick={handlePageJump}
+                        className="h-7 px-2 rounded-md border border-white/15 text-[10px] font-mono text-white/50 hover:text-white hover:border-purple-500/30 transition-colors"
+                      >
+                        Go
+                      </button>
+                    </div>
                     <button
                       disabled={page === totalPages}
                       onClick={() =>
