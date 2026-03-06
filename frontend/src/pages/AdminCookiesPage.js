@@ -203,6 +203,7 @@ function AdminCookieSmallCard({
   canFavorite,
   isFavorited,
   onToggleFavorite,
+  isMasterFavoritesView = false,
 }: {
   cookie: any;
   index: number;
@@ -213,6 +214,7 @@ function AdminCookieSmallCard({
   canFavorite: boolean;
   isFavorited: boolean;
   onToggleFavorite: (id: string) => void;
+  isMasterFavoritesView?: boolean;
 }) {
   const isAlive = cookie.is_alive !== false;
   const sourceLabel = cookie.source === 'free' ? 'FREE' : 'ADMIN';
@@ -317,6 +319,11 @@ function AdminCookieSmallCard({
       <div className="mt-3 pt-2 border-t border-white/5 text-[10px] font-mono text-center tracking-widest text-white/15 group-hover:text-purple-400 transition-colors duration-200">
         TAP TO USE
       </div>
+      {isMasterFavoritesView && cookie.hidden_by_label && (
+        <div className="mt-1 text-[10px] text-white/35 font-mono text-center">
+          hidden by: {cookie.hidden_by_label}
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -710,7 +717,8 @@ export default function AdminCookiesPage() {
 
   const [activeTab, setActiveTab] = useState('all');
   const [favoriteIds, setFavoriteIds] = useState(new Set());
-  const [favoriteCookies, setFavoriteCookies] = useState([]);
+  const [favoriteCookiesMaster, setFavoriteCookiesMaster] = useState([]);
+  const [favoriteCookiesOthers, setFavoriteCookiesOthers] = useState([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
 
   const [page, setPage] = useState(1);
@@ -760,7 +768,20 @@ export default function AdminCookiesPage() {
     setFavoritesLoading(true);
     try {
       const res = await axios.get(`${API}/favorites`, { headers });
-      setFavoriteCookies(res.data.cookies || []);
+      const all = (res.data.cookies || []).map(c => ({
+        ...c,
+        source: c.source === 'free' ? 'free' : 'admin',
+      }));
+      if (isAdmin) {
+        const myId = user?.id;
+        const mine = all.filter(c => c.hidden_by === myId);
+        const others = all.filter(c => c.hidden_by && c.hidden_by !== myId);
+        setFavoriteCookiesMaster(mine);
+        setFavoriteCookiesOthers(others);
+      } else {
+        setFavoriteCookiesMaster(all);
+        setFavoriteCookiesOthers([]);
+      }
       setPage(1);
     } catch {
       toast.error('Failed to load favorites');
@@ -799,15 +820,32 @@ export default function AdminCookiesPage() {
   }, [filteredCookies, favoriteIds, isAdmin]);
 
   const totalForTab =
-    activeTab === 'favorites' ? favoriteCookies.length : publicCookies.length;
+    activeTab === 'favorites'
+      ? isAdmin
+        ? favoriteCookiesMaster.length + favoriteCookiesOthers.length
+        : favoriteCookiesMaster.length
+      : publicCookies.length;
 
   const totalPages = Math.max(1, Math.ceil(totalForTab / pageSize));
 
   const pagedCookies = useMemo(() => {
-    const list = activeTab === 'favorites' ? favoriteCookies : publicCookies;
+    const list =
+      activeTab === 'favorites'
+        ? isAdmin
+          ? [...favoriteCookiesMaster, ...favoriteCookiesOthers]
+          : favoriteCookiesMaster
+        : publicCookies;
     const start = (page - 1) * pageSize;
     return list.slice(start, start + pageSize);
-  }, [activeTab, favoriteCookies, publicCookies, page, pageSize]);
+  }, [
+    activeTab,
+    favoriteCookiesMaster,
+    favoriteCookiesOthers,
+    isAdmin,
+    publicCookies,
+    page,
+    pageSize,
+  ]);
 
   const toggleFavorite = async (cookieId: string) => {
     if (!canFavorite) {
@@ -834,7 +872,8 @@ export default function AdminCookiesPage() {
         newIds.delete(cookieId);
         toast.success('Removed from favorites');
         if (activeTab === 'favorites') {
-          setFavoriteCookies(prev => prev.filter(c => c.id !== cookieId));
+          setFavoriteCookiesMaster(prev => prev.filter(c => c.id !== cookieId));
+          setFavoriteCookiesOthers(prev => prev.filter(c => c.id !== cookieId));
         }
       }
       setFavoriteIds(newIds);
@@ -861,7 +900,16 @@ export default function AdminCookiesPage() {
         headers,
       });
       setCookies(prev => prev.filter(c => c.id !== cookieId));
-      setFavoriteCookies(prev =>
+      setFavoriteCookiesMaster(prev =>
+        prev.filter(
+          c =>
+            !(
+              c.id === cookieId &&
+              (c.source === 'free' ? 'free' : 'admin') === normalizedSource
+            ),
+        ),
+      );
+      setFavoriteCookiesOthers(prev =>
         prev.filter(
           c =>
             !(
@@ -921,7 +969,11 @@ export default function AdminCookiesPage() {
     );
   }
 
-  const selectedList = activeTab === 'favorites' ? favoriteCookies : publicCookies;
+  const favoriteList = isAdmin
+    ? [...favoriteCookiesMaster, ...favoriteCookiesOthers]
+    : favoriteCookiesMaster;
+  const selectedList =
+    activeTab === 'favorites' ? favoriteList : publicCookies;
   const selectedIndex = selectedCookie
     ? selectedList.findIndex(
         c =>
@@ -1039,7 +1091,7 @@ export default function AdminCookiesPage() {
             <div className="text-center py-20">
               <Loader2 className="w-8 h-8 text-yellow-400 animate-spin mx-auto" />
             </div>
-          ) : favoriteCookies.length === 0 ? (
+          ) : favoriteList.length === 0 ? (
             <div className="text-center py-20 text-white/30">
               <Star className="w-12 h-12 mx-auto mb-3 text-white/10" />
               <p>No favorites yet</p>
@@ -1047,6 +1099,69 @@ export default function AdminCookiesPage() {
                 Tap the ★ on any cookie to save it here.
               </p>
             </div>
+          ) : isAdmin ? (
+            <>
+              <h3 className="text-xs font-mono uppercase tracking-wide text-white/40 mb-2">
+                Your favorites
+              </h3>
+              {favoriteCookiesMaster.length === 0 ? (
+                <p className="text-[11px] text-white/30 mb-4">
+                  You have no favorites yet.
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  {favoriteCookiesMaster.map((cookie, idx) => (
+                    <AdminCookieSmallCard
+                      key={`${cookie.source || 'admin'}-${cookie.id}`}
+                      cookie={cookie}
+                      index={idx}
+                      isAdmin={isAdmin}
+                      canFavorite={canFavorite}
+                      isFavorited={favoriteIds.has(cookie.id)}
+                      onDelete={deleteCookie}
+                      onToggleFavorite={toggleFavorite}
+                      isMasterFavoritesView={true}
+                      isInFreeCookies={
+                        cookie.source === 'free' || freeCookieEmails.has(cookie.email)
+                      }
+                      onClick={() => setSelectedCookie(cookie)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <div className="border-t border-white/10 my-4 pt-3">
+                <h3 className="text-xs font-mono uppercase tracking-wide text-white/40 mb-2">
+                  Premium users&apos; favorites
+                </h3>
+              </div>
+
+              {favoriteCookiesOthers.length === 0 ? (
+                <p className="text-[11px] text-white/30">
+                  No favorites from premium users yet.
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-4">
+                  {favoriteCookiesOthers.map((cookie, idx) => (
+                    <AdminCookieSmallCard
+                      key={`${cookie.source || 'admin'}-${cookie.id}`}
+                      cookie={cookie}
+                      index={favoriteCookiesMaster.length + idx}
+                      isAdmin={isAdmin}
+                      canFavorite={canFavorite}
+                      isFavorited={favoriteIds.has(cookie.id)}
+                      onDelete={deleteCookie}
+                      onToggleFavorite={toggleFavorite}
+                      isMasterFavoritesView={true}
+                      isInFreeCookies={
+                        cookie.source === 'free' || freeCookieEmails.has(cookie.email)
+                      }
+                      onClick={() => setSelectedCookie(cookie)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
             <>
               <div className="grid grid-cols-3 gap-4">
