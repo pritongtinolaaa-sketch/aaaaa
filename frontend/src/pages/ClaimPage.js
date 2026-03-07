@@ -6,12 +6,11 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import axios from 'axios';
 
-const API_BASE = 'https://cookie-checker.preview.emergentagent.com';
+const API_BASE = process.env.REACT_APP_BACKEND_URL;
 
 export default function ClaimPage() {
-  const [status, setStatus] = useState('claiming'); // claiming | success | error
+  const [status, setStatus] = useState('claiming');
   const [errorMsg, setErrorMsg] = useState('');
-  const { setToken } = useAuth(); // see note below
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -22,10 +21,10 @@ export default function ClaimPage() {
           {},
           { timeout: 15000 }
         );
-        setToken(data.token, data.user);
+        localStorage.setItem('schiro_token', data.token);
         setStatus('success');
         toast.success('30-minute trial access granted!');
-        setTimeout(() => navigate('/'), 2000);
+        setTimeout(() => window.location.href = '/', 2000);
       } catch (err) {
         const msg =
           err.response?.data?.detail ||
@@ -34,20 +33,17 @@ export default function ClaimPage() {
         setStatus('error');
       }
     };
-
     claim();
-  }, [navigate, setToken]); // 👈 only this line changed
+  }, []);
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-[#050505] overflow-hidden">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background:
-            'radial-gradient(ellipse at center, rgba(229,9,20,0.06) 0%, transparent 60%)',
+          background: 'radial-gradient(ellipse at center, rgba(229,9,20,0.06) 0%, transparent 60%)',
         }}
       />
-
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -65,7 +61,6 @@ export default function ClaimPage() {
               <p className="text-white/50 text-sm font-mono">Activating your trial...</p>
             </>
           )}
-
           {status === 'success' && (
             <>
               <Clock className="w-8 h-8 text-green-400 mx-auto mt-4" />
@@ -75,7 +70,6 @@ export default function ClaimPage() {
               </p>
             </>
           )}
-
           {status === 'error' && (
             <>
               <p className="text-red-400 font-bebas text-2xl tracking-widest">ACCESS DENIED</p>
