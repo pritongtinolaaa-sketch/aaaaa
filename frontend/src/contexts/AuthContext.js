@@ -13,7 +13,8 @@ export function AuthProvider({ children }) {
     if (!token) { setLoading(false); return; }
     try {
       const res = await axios.get(`${API}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 10000,
       });
       setUser(res.data);
     } catch {
@@ -28,7 +29,14 @@ export function AuthProvider({ children }) {
   useEffect(() => { validateToken(); }, [validateToken]);
 
   const login = async (key) => {
-    const res = await axios.post(`${API}/auth/login`, { key });
+    const normalizedKey = String(key || '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim();
+    const res = await axios.post(
+      `${API}/auth/login`,
+      { key: normalizedKey },
+      { timeout: 15000 },
+    );
     localStorage.setItem('schiro_token', res.data.token);
     setToken(res.data.token);
     setUser(res.data.user);
