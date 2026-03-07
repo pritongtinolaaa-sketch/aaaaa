@@ -13,45 +13,46 @@ export default function ClaimPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fromAd = sessionStorage.getItem('trial_from_ad');
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const fromAdParam = params.get('ad');
+  const fromAdSession = sessionStorage.getItem('trial_from_ad');
 
-    // block direct access
-    if (!fromAd) {
-      navigate('/auth');
-      return;
+  if (fromAdParam !== '1' && fromAdSession !== '1') {
+    navigate('/auth', { replace: true });
+    return;
+  }
+
+  sessionStorage.removeItem('trial_from_ad');
+
+  const claim = async () => {
+    try {
+      const { data } = await axios.post(
+        `${API_BASE}/api/free-tier/claim`,
+        {},
+        { timeout: 15000 }
+      );
+
+      localStorage.setItem('schiro_token', data.token);
+      setStatus('success');
+      toast.success('30-minute trial access granted!');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 2000);
+    } catch (err) {
+      const msg =
+        err.response?.data?.detail ||
+        (err.code === 'ECONNABORTED'
+          ? 'Request timed out.'
+          : 'Unable to claim trial access.');
+
+      setErrorMsg(msg);
+      setStatus('error');
     }
+  };
 
-    // remove flag so refresh can't bypass
-    sessionStorage.removeItem('trial_from_ad');
-
-    const claim = async () => {
-      try {
-        const { data } = await axios.post(
-          `${API_BASE}/api/free-tier/claim`,
-          {},
-          { timeout: 15000 }
-        );
-
-        localStorage.setItem('schiro_token', data.token);
-        setStatus('success');
-        toast.success('30-minute trial access granted!');
-        setTimeout(() => (window.location.href = '/'), 2000);
-
-      } catch (err) {
-        const msg =
-          err.response?.data?.detail ||
-          (err.code === 'ECONNABORTED'
-            ? 'Request timed out.'
-            : 'Unable to claim trial access.');
-
-        setErrorMsg(msg);
-        setStatus('error');
-      }
-    };
-
-    claim();
-  }, [navigate]);
+  claim();
+}, [navigate]);
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-[#050505] overflow-hidden">
