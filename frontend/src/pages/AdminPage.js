@@ -26,6 +26,8 @@ import {
   Activity,
   TimerReset,
   History,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -89,6 +91,7 @@ export default function AdminPage() {
   const [editingExpiry, setEditingExpiry] = useState({});
   const [editingTier, setEditingTier] = useState({});
   const [editingLabel, setEditingLabel] = useState({});
+  const [showRecentSessions, setShowRecentSessions] = useState(false);
 
   const [trialStats, setTrialStats] = useState({
     active_now: 0,
@@ -118,11 +121,14 @@ export default function AdminPage() {
     try {
       setTrialStatsLoading(true);
       const res = await axios.get(`${API}/admin/trial-stats`, { headers });
+
       setTrialStats({
-        active_now: res.data?.active_now || 0,
-        claimed_today: res.data?.claimed_today || 0,
-        claimed_24h: res.data?.claimed_24h || 0,
-        recent_sessions: res.data?.recent_sessions || [],
+        active_now: Number(res.data?.active_now || 0),
+        claimed_today: Number(res.data?.claimed_today || 0),
+        claimed_24h: Number(res.data?.claimed_24h || 0),
+        recent_sessions: Array.isArray(res.data?.recent_sessions)
+          ? res.data.recent_sessions
+          : [],
       });
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to load trial stats');
@@ -140,6 +146,16 @@ export default function AdminPage() {
     fetchKeys();
     fetchTrialStats();
   }, [isMaster, navigate, fetchKeys, fetchTrialStats]);
+
+  useEffect(() => {
+    if (!isMaster) return;
+
+    const interval = setInterval(() => {
+      fetchTrialStats();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [isMaster, fetchTrialStats]);
 
   const createKey = async () => {
     if (!newLabel.trim()) {
@@ -417,9 +433,8 @@ export default function AdminPage() {
                 <Button
                   size="sm"
                   onClick={() => {
-                    const val = document.getElementById(
-                      `expiry-input-${keyItem.id}`,
-                    ).value;
+                    const el = document.getElementById(`expiry-input-${keyItem.id}`);
+                    const val = el?.value;
                     if (!val) return;
                     updateExpiry(keyItem.id, phLocalToUtc(val));
                   }}
@@ -464,9 +479,9 @@ export default function AdminPage() {
                 <Button
                   size="sm"
                   onClick={() => {
-                    const val = document.getElementById(
-                      `tier-input-${keyItem.id}`,
-                    ).value;
+                    const el = document.getElementById(`tier-input-${keyItem.id}`);
+                    const val = el?.value;
+                    if (!val) return;
                     updateTier(keyItem.id, val);
                   }}
                   className="h-8 bg-purple-500/20 hover:bg-purple-500/40 text-purple-400 text-xs px-3"
@@ -495,9 +510,8 @@ export default function AdminPage() {
                   className="bg-black/50 border-white/10 focus:border-primary text-white h-8 w-56 text-xs"
                   onKeyDown={e => {
                     if (e.key === 'Enter') {
-                      const val = document.getElementById(
-                        `label-input-${keyItem.id}`,
-                      ).value;
+                      const el = document.getElementById(`label-input-${keyItem.id}`);
+                      const val = el?.value;
                       updateLabel(keyItem.id, val);
                     }
                   }}
@@ -505,9 +519,8 @@ export default function AdminPage() {
                 <Button
                   size="sm"
                   onClick={() => {
-                    const val = document.getElementById(
-                      `label-input-${keyItem.id}`,
-                    ).value;
+                    const el = document.getElementById(`label-input-${keyItem.id}`);
+                    const val = el?.value;
                     updateLabel(keyItem.id, val);
                   }}
                   className="h-8 bg-primary/20 hover:bg-primary/40 text-primary text-xs px-3"
@@ -773,7 +786,7 @@ export default function AdminPage() {
             <div className="font-bebas text-3xl tracking-widest text-green-400">
               {trialStatsLoading ? '...' : trialStats.active_now}
             </div>
-            <p className="text-[11px] text-white/25 mt-1">Currently active now</p>
+            <p className="text-[11px] text-white/25 mt-1">Auto-refreshes every 10 seconds</p>
           </div>
 
           <div className="bg-black/60 backdrop-blur-md border border-blue-500/20 rounded-2xl p-5">
@@ -804,60 +817,96 @@ export default function AdminPage() {
         </div>
 
         <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <h2 className="font-bebas text-xl tracking-wider text-white">
                 RECENT TRIAL SESSIONS
               </h2>
               <p className="text-xs text-white/30 mt-1">Latest 20 claim sessions in PHT</p>
             </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={fetchTrialStats}
-              className="text-white/40 hover:text-white"
-              disabled={trialStatsLoading}
-            >
-              {trialStatsLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                'Refresh'
-              )}
-            </Button>
+
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowRecentSessions(prev => !prev)}
+                className="text-white/70 hover:text-white border border-white/10 hover:border-white/20"
+              >
+                {showRecentSessions ? (
+                  <>
+                    <ChevronUp className="w-4 h-4 mr-2" />
+                    Hide Sessions
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-4 h-4 mr-2" />
+                    Show Sessions
+                  </>
+                )}
+              </Button>
+
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={fetchTrialStats}
+                className="text-white/40 hover:text-white"
+                disabled={trialStatsLoading}
+              >
+                {trialStatsLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  'Refresh'
+                )}
+              </Button>
+            </div>
           </div>
 
-          {trialStatsLoading ? (
-            <div className="text-center py-6">
-              <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto" />
-            </div>
-          ) : trialStats.recent_sessions.length === 0 ? (
-            <div className="text-center py-6 text-white/30 text-sm">
-              No recent trial sessions.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {trialStats.recent_sessions.map((session) => (
-                <div
-                  key={session.session_id}
-                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-black/40 rounded-xl px-4 py-3 border border-white/5"
-                >
-                  <div className="flex flex-col">
-                    <span className="font-mono text-xs text-white/60">
-                      {session.ip || 'Unknown IP'}
-                    </span>
-                    <span className="text-[11px] text-white/25 mt-1">
-                      Session: {session.session_id}
-                    </span>
-                  </div>
+          <AnimatePresence initial={false}>
+            {showRecentSessions && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-4">
+                  {trialStatsLoading ? (
+                    <div className="text-center py-6">
+                      <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto" />
+                    </div>
+                  ) : trialStats.recent_sessions.length === 0 ? (
+                    <div className="text-center py-6 text-white/30 text-sm">
+                      No recent trial sessions.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                      {trialStats.recent_sessions.map(session => (
+                        <div
+                          key={session.session_id}
+                          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-black/40 rounded-xl px-4 py-3 border border-white/5"
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-mono text-xs text-white/60">
+                              {session.ip || 'Unknown IP'}
+                            </span>
+                            <span className="text-[11px] text-white/25 mt-1 break-all">
+                              Session: {session.session_id}
+                            </span>
+                          </div>
 
-                  <div className="text-[11px] text-white/30 sm:text-right">
-                    <div>Created: {formatPHT(session.created_at, true)} PHT</div>
-                    <div>Expires: {formatPHT(session.expires_at, true)} PHT</div>
-                  </div>
+                          <div className="text-[11px] text-white/30 sm:text-right">
+                            <div>Created: {formatPHT(session.created_at, true)} PHT</div>
+                            <div>Expires: {formatPHT(session.expires_at, true)} PHT</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <AnimatePresence>
