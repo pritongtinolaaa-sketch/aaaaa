@@ -37,7 +37,7 @@ export default function ClaimPage() {
     };
 
     claim();
-  }, []);
+  }, [navigate, setToken]); // 👈 only this line changed
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-[#050505] overflow-hidden">
