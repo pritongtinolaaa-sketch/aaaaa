@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -748,69 +748,72 @@ export default function FreeCookiesPage() {
   const canFavorite = isAdmin || isPremium;
   const pageSize = 21;
 
-  const fetchCookies = async (pageParam = 1, filtersParam = filters) => {
-    setLoading(true);
+  const fetchCookies = useCallback(
+    async (pageParam = 1, filtersParam = filters) => {
+      setLoading(true);
 
-    try {
-      const params = {
-        page: pageParam,
-        page_size: pageSize,
-        status: filtersParam.status === 'all' ? '' : filtersParam.status,
-        plan: filtersParam.plan === 'all' ? '' : filtersParam.plan,
-        country: filtersParam.country === 'all' ? '' : filtersParam.country,
-      };
+      try {
+        const params = {
+          page: pageParam,
+          page_size: pageSize,
+          status: filtersParam.status === 'all' ? '' : filtersParam.status,
+          plan: filtersParam.plan === 'all' ? '' : filtersParam.plan,
+          country: filtersParam.country === 'all' ? '' : filtersParam.country,
+        };
 
-      const res = await axios.get(`${API}/free-cookies`, {
-        headers,
-        params,
-      });
+        const res = await axios.get(`${API}/free-cookies`, {
+          headers,
+          params,
+        });
 
-      const data = res.data || {};
-      const list = Array.isArray(data.cookies) ? data.cookies : [];
+        const data = res.data || {};
+        const list = Array.isArray(data.cookies) ? data.cookies : [];
 
-      setCookies(list);
-      setTotal(typeof data.total === 'number' ? data.total : list.length);
-      setTotalPages(
-        typeof data.total_pages === 'number' && data.total_pages > 0
-          ? data.total_pages
-          : 1,
-      );
+        setCookies(list);
+        setTotal(typeof data.total === 'number' ? data.total : list.length);
+        setTotalPages(
+          typeof data.total_pages === 'number' && data.total_pages > 0
+            ? data.total_pages
+            : 1,
+        );
 
-      const backendPlans = Array.isArray(data.available_plans)
-        ? data.available_plans.filter(Boolean)
-        : [];
-      const backendCountries = Array.isArray(data.available_countries)
-        ? data.available_countries.filter(Boolean)
-        : [];
+        const backendPlans = Array.isArray(data.available_plans)
+          ? data.available_plans.filter(Boolean)
+          : [];
+        const backendCountries = Array.isArray(data.available_countries)
+          ? data.available_countries.filter(Boolean)
+          : [];
 
-      const fallbackPlans = Array.from(
-        new Set(list.map(c => c.plan).filter(Boolean)),
-      ).sort();
+        const fallbackPlans = Array.from(
+          new Set(list.map(c => c.plan).filter(Boolean)),
+        ).sort();
 
-      const fallbackCountries = Array.from(
-        new Set(list.map(c => c.country).filter(Boolean)),
-      ).sort();
+        const fallbackCountries = Array.from(
+          new Set(list.map(c => c.country).filter(Boolean)),
+        ).sort();
 
-      setAllPlanOptions([
-        'all',
-        ...(backendPlans.length > 0 ? backendPlans : fallbackPlans),
-      ]);
-      setAllCountryOptions([
-        'all',
-        ...(backendCountries.length > 0 ? backendCountries : fallbackCountries),
-      ]);
-    } catch (err) {
-      console.error('Failed to load free cookies:', err);
-      setCookies([]);
-      setTotal(0);
-      setTotalPages(1);
-      toast.error(
-        err.response?.data?.detail || 'Failed to load free cookies',
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+        setAllPlanOptions([
+          'all',
+          ...(backendPlans.length > 0 ? backendPlans : fallbackPlans),
+        ]);
+        setAllCountryOptions([
+          'all',
+          ...(backendCountries.length > 0 ? backendCountries : fallbackCountries),
+        ]);
+      } catch (err) {
+        console.error('Failed to load free cookies:', err);
+        setCookies([]);
+        setTotal(0);
+        setTotalPages(1);
+        toast.error(
+          err.response?.data?.detail || 'Failed to load free cookies',
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filters, headers, pageSize],
+  );
 
   const saveLimit = async () => {
     const val = parseInt(limitInput, 10);
@@ -867,7 +870,7 @@ export default function FreeCookiesPage() {
     }
   };
 
-  const fetchLimit = async () => {
+  const fetchLimit = useCallback(async () => {
     if (!isAdmin) return;
 
     try {
@@ -880,7 +883,7 @@ export default function FreeCookiesPage() {
     } catch {
       // ignore
     }
-  };
+  }, [headers, isAdmin]);
 
   const handleDeleteCookie = async cookieToDelete => {
     if (!isAdmin) return;
@@ -929,7 +932,7 @@ export default function FreeCookiesPage() {
     }
   };
 
-  const fetchFavoriteIds = async () => {
+  const fetchFavoriteIds = useCallback(async () => {
     if (!canFavorite) return;
 
     try {
@@ -938,9 +941,9 @@ export default function FreeCookiesPage() {
     } catch {
       // ignore
     }
-  };
+  }, [canFavorite, headers]);
 
-  const fetchFavorites = async () => {
+  const fetchFavorites = useCallback(async () => {
     if (!canFavorite) return;
 
     setFavoritesLoading(true);
@@ -967,7 +970,7 @@ export default function FreeCookiesPage() {
     } finally {
       setFavoritesLoading(false);
     }
-  };
+  }, [canFavorite, headers, isAdmin]);
 
   const updateFilters = updater => {
     setPage(1);
@@ -1039,22 +1042,22 @@ export default function FreeCookiesPage() {
   useEffect(() => {
     if (!token || !canFavorite) return;
     fetchFavoriteIds();
-  }, [token, canFavorite]);
+  }, [token, canFavorite, fetchFavoriteIds]);
 
   useEffect(() => {
     if (!token || !isAdmin) return;
     fetchLimit();
-  }, [token, isAdmin]);
+  }, [token, isAdmin, fetchLimit]);
 
   useEffect(() => {
     if (!token || activeTab !== 'all') return;
     fetchCookies(page, filters);
-  }, [token, activeTab, page, filters]);
+  }, [token, activeTab, page, filters, fetchCookies]);
 
   useEffect(() => {
     if (!token || activeTab !== 'favorites') return;
     fetchFavorites();
-  }, [token, activeTab]);
+  }, [token, activeTab, fetchFavorites]);
 
   useEffect(() => {
     setPageInput(String(page));
