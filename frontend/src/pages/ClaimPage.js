@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Shield, Loader2, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
