@@ -147,16 +147,6 @@ export default function AdminPage() {
     fetchTrialStats();
   }, [isMaster, navigate, fetchKeys, fetchTrialStats]);
 
-  useEffect(() => {
-    if (!isMaster) return;
-
-    const interval = setInterval(() => {
-      fetchTrialStats();
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [isMaster, fetchTrialStats]);
-
   const createKey = async () => {
     if (!newLabel.trim()) {
       toast.error('Enter a label');
