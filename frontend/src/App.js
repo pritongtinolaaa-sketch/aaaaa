@@ -2,6 +2,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
+import ClaimPage from '@/pages/ClaimPage';
 import AuthPage from "@/pages/AuthPage";
 import DashboardPage from "@/pages/DashboardPage";
 import HomeDashboardPage from "@/pages/HomeDashboardPage";
@@ -74,6 +75,7 @@ function AppLayout() {
       <Navbar />
       <main className="pt-16">
         <Routes>
+          <Route path="/claim" element={<ClaimPage />} />
           <Route path="/" element={<ProtectedRoute><HomeDashboardPage /></ProtectedRoute>} />
           <Route path="/checker" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/admin" element={<MasterRoute><AdminPage /></MasterRoute>} />
