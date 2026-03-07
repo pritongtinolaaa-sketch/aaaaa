@@ -21,7 +21,7 @@ export default function ClaimPage() {
         const { data } = await axios.post(
           `${API_BASE}/api/free-tier/claim`,
           {},
-          { timeout: 15000, withCredentials: true }
+          { timeout: 15000 }
         );
         setToken(data.token, data.user);
         setStatus('success');
