@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
 const DEFAULT_GUIDE = {
   pc: 'Open Cookie Checker and paste/upload cookies, then review results.',
   mobile: 'Use your phone browser to open saved token links and sign in quickly.',
@@ -82,7 +83,6 @@ export default function HomeDashboardPage() {
 
   useEffect(() => {
     if (!token) return;
-
     axios
       .get(`${API}/admin/notice`, { headers })
       .then(res => setNoticeText(res.data?.message || ''))
@@ -91,7 +91,6 @@ export default function HomeDashboardPage() {
 
   useEffect(() => {
     if (!token) return;
-
     axios
       .get(`${API}/admin/guide`, { headers })
       .then(res =>
@@ -142,7 +141,6 @@ export default function HomeDashboardPage() {
   const greetingName = useMemo(() => {
     const raw = String(user?.label || '').trim();
     if (!raw) return 'User';
-
     return raw.toLowerCase().replace(/\b\w/g, m => m.toUpperCase());
   }, [user?.label]);
 
@@ -150,112 +148,172 @@ export default function HomeDashboardPage() {
     <div className="min-h-[calc(100vh-9rem)] bg-[#050505]">
       <div className="max-w-5xl mx-auto px-6 py-4 md:py-6">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="rounded-2xl p-6 md:p-8 bg-gradient-to-b from-white/10 to-white/[0.03] border border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_8px_24px_rgba(0,0,0,0.6)]">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+          <div className="rounded-2xl border border-white/20 bg-gradient-to-b from-white/10 to-white/[0.03] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_8px_24px_rgba(0,0,0,0.6)] md:p-8">
+            <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2">
               <div className="flex flex-col">
-                <h1 className="text-3xl sm:text-4xl font-sans font-semibold normal-case tracking-normal text-white">
+                <h1 className="text-3xl font-sans font-semibold tracking-normal text-white sm:text-4xl">
                   Hi, <span className="text-primary">{greetingName}</span>!
                 </h1>
 
                 <div className="mt-4 flex items-center gap-3">
-                  <span className="text-white/50 text-sm font-mono">Current tier:</span>
+                  <span className="text-sm font-mono text-white/50">Current tier:</span>
 
                   {isMaster ? (
-                    <div className="relative inline-flex items-center justify-center">
-                      <Badge className="relative overflow-hidden text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-300 via-yellow-100 to-amber-300 text-amber-950 border border-yellow-100/90 ring-1 ring-amber-200/60 shadow-[0_0_14px_rgba(251,191,36,0.9),0_0_26px_rgba(245,158,11,0.55),inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_1px_rgba(146,64,14,0.35)]">
-                        <span className="relative z-10">MASTER</span>
+                    <div className="relative inline-flex items-center justify-center overflow-visible">
+                      <div className="relative inline-flex items-center justify-center overflow-visible px-3 py-2">
+                        <Badge className="relative z-10 overflow-hidden rounded-full border border-yellow-100/90 bg-gradient-to-r from-amber-300 via-yellow-100 to-amber-300 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-950 ring-1 ring-amber-200/60 shadow-[0_0_14px_rgba(251,191,36,0.9),0_0_26px_rgba(245,158,11,0.55),inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_1px_rgba(146,64,14,0.35)]">
+                          <span className="relative z-10 font-mono">MASTER</span>
+
+                          <motion.span
+                            className="pointer-events-none absolute inset-y-0 left-[-38%] z-0 w-[36%] skew-x-[-20deg] bg-gradient-to-r from-transparent via-white/80 to-transparent"
+                            animate={{ x: ['0%', '340%'] }}
+                            transition={{
+                              duration: 2.5,
+                              repeat: Infinity,
+                              repeatDelay: 1.2,
+                              ease: 'easeInOut',
+                            }}
+                          />
+                        </Badge>
 
                         <motion.span
-                          className="pointer-events-none absolute inset-y-0 left-[-35%] z-0 w-[38%] skew-x-[-20deg] bg-gradient-to-r from-transparent via-white/80 to-transparent"
-                          animate={{ x: ['0%', '320%'] }}
+                          className="pointer-events-none absolute left-[-10px] top-1/2 z-20 text-[10px] leading-none text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.98)]"
+                          animate={{
+                            opacity: [0, 1, 0],
+                            scale: [0.65, 1.15, 0.65],
+                            x: [0, -1, 0],
+                            y: [-1, -5, -1],
+                            rotate: [0, -10, 0],
+                          }}
                           transition={{
-                            duration: 2.4,
+                            duration: 1.9,
                             repeat: Infinity,
-                            repeatDelay: 1.3,
                             ease: 'easeInOut',
+                            delay: 0.1,
+                          }}
+                        >
+                          ✦
+                        </motion.span>
+
+                        <motion.span
+                          className="pointer-events-none absolute left-[18%] top-[-6px] z-20 text-[9px] leading-none text-yellow-50 drop-shadow-[0_0_8px_rgba(255,248,200,1)]"
+                          animate={{
+                            opacity: [0, 1, 0],
+                            scale: [0.7, 1.1, 0.7],
+                            y: [0, -4, 0],
+                            rotate: [0, 10, 0],
+                          }}
+                          transition={{
+                            duration: 1.8,
+                            repeat: Infinity,
+                            ease: 'easeInOut',
+                            delay: 0.35,
+                          }}
+                        >
+                          ✦
+                        </motion.span>
+
+                        <motion.span
+                          className="pointer-events-none absolute right-[-10px] top-1/2 z-20 text-[11px] leading-none text-yellow-100 drop-shadow-[0_0_10px_rgba(255,248,200,1)]"
+                          animate={{
+                            opacity: [0, 1, 0],
+                            scale: [0.65, 1.25, 0.65],
+                            x: [0, 2, 0],
+                            y: [0, -3, 0],
+                            rotate: [0, 10, 0],
+                          }}
+                          transition={{
+                            duration: 2.1,
+                            repeat: Infinity,
+                            ease: 'easeInOut',
+                            delay: 0.8,
+                          }}
+                        >
+                          ✦
+                        </motion.span>
+
+                        <motion.span
+                          className="pointer-events-none absolute bottom-[-4px] right-[22%] z-20 text-[9px] leading-none text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.98)]"
+                          animate={{
+                            opacity: [0, 1, 0],
+                            scale: [0.7, 1.1, 0.7],
+                            y: [0, 3, 0],
+                            rotate: [0, 8, 0],
+                          }}
+                          transition={{
+                            duration: 1.9,
+                            repeat: Infinity,
+                            ease: 'easeInOut',
+                            delay: 1.25,
+                          }}
+                        >
+                          ✦
+                        </motion.span>
+
+                        <motion.span
+                          className="pointer-events-none absolute z-0 h-1.5 w-1.5 rounded-full bg-amber-100/90 shadow-[0_0_10px_rgba(255,235,160,0.95)]"
+                          animate={{
+                            x: [-18, -5, 10, 18, 8, -10, -18],
+                            y: [0, -10, -12, 0, 10, 8, 0],
+                            opacity: [0.2, 0.8, 0.95, 0.6, 0.9, 0.5, 0.2],
+                            scale: [0.75, 1, 1.15, 0.95, 1.1, 0.9, 0.75],
+                          }}
+                          transition={{
+                            duration: 5.5,
+                            repeat: Infinity,
+                            ease: 'linear',
                           }}
                         />
-                      </Badge>
 
-                      <motion.span
-                        className="pointer-events-none absolute -top-1 left-[18%] h-1.5 w-1.5 rotate-45 bg-white shadow-[0_0_10px_rgba(255,255,255,0.9)]"
-                        animate={{
-                          opacity: [0, 1, 0],
-                          scale: [0.6, 1.5, 0.6],
-                          y: [0, -4, 0],
-                        }}
-                        transition={{
-                          duration: 1.8,
-                          repeat: Infinity,
-                          ease: 'easeInOut',
-                          delay: 0,
-                        }}
-                      />
+                        <motion.span
+                          className="pointer-events-none absolute z-0 h-1 w-1 rounded-full bg-yellow-50/95 shadow-[0_0_8px_rgba(255,245,190,1)]"
+                          animate={{
+                            x: [16, 4, -10, -18, -8, 12, 16],
+                            y: [0, 10, 12, 0, -10, -8, 0],
+                            opacity: [0.2, 0.65, 0.9, 0.55, 0.85, 0.45, 0.2],
+                            scale: [0.7, 0.95, 1.1, 0.9, 1.05, 0.85, 0.7],
+                          }}
+                          transition={{
+                            duration: 4.8,
+                            repeat: Infinity,
+                            ease: 'linear',
+                            delay: 0.9,
+                          }}
+                        />
 
-                      <motion.span
-                        className="pointer-events-none absolute top-1/2 -right-1 h-2 w-2 rotate-45 bg-yellow-100 shadow-[0_0_12px_rgba(255,240,160,1)]"
-                        animate={{
-                          opacity: [0, 1, 0],
-                          scale: [0.5, 1.7, 0.5],
-                          x: [0, 3, 0],
-                          y: [0, -2, 0],
-                        }}
-                        transition={{
-                          duration: 2.1,
-                          repeat: Infinity,
-                          ease: 'easeInOut',
-                          delay: 0.7,
-                        }}
-                      />
-
-                      <motion.span
-                        className="pointer-events-none absolute -bottom-0.5 right-[22%] h-1.5 w-1.5 rotate-45 bg-white shadow-[0_0_10px_rgba(255,255,255,0.9)]"
-                        animate={{
-                          opacity: [0, 1, 0],
-                          scale: [0.5, 1.4, 0.5],
-                          y: [0, 2, 0],
-                        }}
-                        transition={{
-                          duration: 1.9,
-                          repeat: Infinity,
-                          ease: 'easeInOut',
-                          delay: 1.2,
-                        }}
-                      />
-
-                      <motion.span
-                        className="pointer-events-none absolute -top-1.5 right-[30%] text-[8px] leading-none text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.95)]"
-                        animate={{
-                          opacity: [0, 1, 0],
-                          scale: [0.7, 1.15, 0.7],
-                          rotate: [0, 25, 0],
-                        }}
-                        transition={{
-                          duration: 2.1,
-                          repeat: Infinity,
-                          ease: 'easeInOut',
-                          delay: 1.5,
-                        }}
-                      >
-                        ✦
-                      </motion.span>
+                        <motion.span
+                          className="pointer-events-none absolute z-0 h-1 w-1 rounded-full bg-amber-200/90 shadow-[0_0_8px_rgba(255,220,120,0.95)]"
+                          animate={{
+                            x: [-4, 12, 18, 4, -14, -18, -4],
+                            y: [-12, -8, 0, 10, 12, 0, -12],
+                            opacity: [0.15, 0.55, 0.85, 0.55, 0.9, 0.45, 0.15],
+                            scale: [0.65, 0.9, 1.05, 0.9, 1.05, 0.85, 0.65],
+                          }}
+                          transition={{
+                            duration: 6.2,
+                            repeat: Infinity,
+                            ease: 'linear',
+                            delay: 1.6,
+                          }}
+                        />
+                      </div>
                     </div>
                   ) : isPremium ? (
-                    <Badge className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-600/35 via-violet-500/30 to-purple-600/35 text-purple-200 border border-purple-300/40 ring-1 ring-purple-400/25 shadow-[0_0_8px_rgba(168,85,247,0.35),inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_1px_rgba(46,16,101,0.3)]">
+                    <Badge className="rounded-full border border-purple-300/40 bg-gradient-to-r from-purple-600/35 via-violet-500/30 to-purple-600/35 px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider text-purple-200 ring-1 ring-purple-400/25 shadow-[0_0_8px_rgba(168,85,247,0.35),inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_1px_rgba(46,16,101,0.3)]">
                       PREMIUM
                     </Badge>
                   ) : (
-                    <Badge className="text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-white/10 text-white/40 border border-white/10">
+                    <Badge className="rounded-sm border border-white/10 bg-white/10 px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider text-white/40">
                       FREE
                     </Badge>
                   )}
 
-                  <span className="text-xs text-white/30 font-mono">{tierLabel}</span>
+                  <span className="text-xs font-mono text-white/30">{tierLabel}</span>
                 </div>
 
                 <div className="mt-8 rounded-xl border border-green-500/20 bg-green-500/5 p-5">
-                  <div className="flex items-center gap-2 text-green-400 mb-2">
-                    <Cookie className="w-4 h-4" />
+                  <div className="mb-2 flex items-center gap-2 text-green-400">
+                    <Cookie className="h-4 w-4" />
                     <span className="text-xs font-mono uppercase tracking-wide">
                       Current number of all cookies
                     </span>
@@ -267,13 +325,13 @@ export default function HomeDashboardPage() {
 
                   {!loading && (
                     <>
-                      <p className="text-xs text-white/35 mt-1 font-mono">
+                      <p className="mt-1 text-xs font-mono text-white/35">
                         Free: {counts.free}
                         {canAccessAdmin ? ` | Admin: ${counts.admin}` : ''}
                       </p>
 
                       {!canAccessAdmin && (
-                        <div className="mt-3 pt-3 border-t border-white/10 space-y-1">
+                        <div className="mt-3 space-y-1 border-t border-white/10 pt-3">
                           <p className="text-xs font-mono text-white/40">
                             Free tier cookies: <span className="text-green-400">30</span>
                           </p>
@@ -288,9 +346,9 @@ export default function HomeDashboardPage() {
                 </div>
               </div>
 
-              <div className="rounded-xl p-5 border border-primary/35 bg-gradient-to-b from-primary/12 to-white/[0.02] shadow-[0_0_20px_rgba(229,9,20,0.2),inset_0_1px_0_rgba(255,255,255,0.2)] h-full min-h-[250px] flex flex-col">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-bebas tracking-widest text-primary text-2xl drop-shadow-[0_0_8px_rgba(229,9,20,0.35)]">
+              <div className="flex min-h-[250px] h-full flex-col rounded-xl border border-primary/35 bg-gradient-to-b from-primary/12 to-white/[0.02] p-5 shadow-[0_0_20px_rgba(229,9,20,0.2),inset_0_1px_0_rgba(255,255,255,0.2)]">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="font-bebas text-2xl tracking-widest text-primary drop-shadow-[0_0_8px_rgba(229,9,20,0.35)]">
                     ADMIN NOTICE
                   </span>
 
@@ -298,14 +356,14 @@ export default function HomeDashboardPage() {
                     (isEditingNotice ? (
                       <button
                         onClick={handleSaveNotice}
-                        className="text-xs text-green-400 hover:text-green-300 font-mono"
+                        className="text-xs font-mono text-green-400 hover:text-green-300"
                       >
                         SAVE
                       </button>
                     ) : (
                       <button
                         onClick={() => setIsEditingNotice(true)}
-                        className="text-xs text-white/30 hover:text-white/60 font-mono"
+                        className="text-xs font-mono text-white/30 hover:text-white/60"
                       >
                         EDIT
                       </button>
@@ -316,12 +374,12 @@ export default function HomeDashboardPage() {
                   <textarea
                     value={noticeText}
                     onChange={e => setNoticeText(e.target.value)}
-                    className="w-full flex-1 min-h-[170px] bg-black/80 border border-white/10 rounded-xl text-xs text-white/70 p-3 resize-none focus:border-primary focus:outline-none font-mono text-center"
+                    className="min-h-[170px] w-full flex-1 resize-none rounded-xl border border-white/10 bg-black/80 p-3 text-center text-xs font-mono text-white/70 outline-none focus:border-primary"
                     placeholder="Type your notice here..."
                   />
                 ) : (
-                  <div className="flex-1 flex items-center justify-center">
-                    <p className="text-white/75 text-sm font-mono whitespace-pre-wrap text-center leading-relaxed">
+                  <div className="flex flex-1 items-center justify-center">
+                    <p className="whitespace-pre-wrap text-center text-sm font-mono leading-relaxed text-white/75">
                       {noticeText || 'No notice posted.'}
                     </p>
                   </div>
@@ -335,10 +393,10 @@ export default function HomeDashboardPage() {
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.08 }}
-          className="mt-6 rounded-2xl p-5 md:p-6 bg-gradient-to-b from-white/10 to-white/[0.03] border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_rgba(0,0,0,0.5)]"
+          className="mt-6 rounded-2xl border border-white/15 bg-gradient-to-b from-white/10 to-white/[0.03] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_rgba(0,0,0,0.5)] md:p-6"
         >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bebas tracking-widest text-white text-2xl">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-bebas text-2xl tracking-widest text-white">
               HOW TO USE THE SITE
             </h2>
 
@@ -347,13 +405,13 @@ export default function HomeDashboardPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleSaveGuide}
-                    className="text-xs text-green-400 hover:text-green-300 font-mono"
+                    className="text-xs font-mono text-green-400 hover:text-green-300"
                   >
                     SAVE
                   </button>
                   <button
                     onClick={() => setIsEditingGuide(false)}
-                    className="text-xs text-white/30 hover:text-white/60 font-mono"
+                    className="text-xs font-mono text-white/30 hover:text-white/60"
                   >
                     CANCEL
                   </button>
@@ -361,14 +419,14 @@ export default function HomeDashboardPage() {
               ) : (
                 <button
                   onClick={() => setIsEditingGuide(true)}
-                  className="text-xs text-white/30 hover:text-white/60 font-mono"
+                  className="text-xs font-mono text-white/30 hover:text-white/60"
                 >
                   EDIT
                 </button>
               ))}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {[
               { key: 'pc', title: 'PC' },
               { key: 'mobile', title: 'MOBILE' },
@@ -376,9 +434,9 @@ export default function HomeDashboardPage() {
             ].map(item => (
               <div
                 key={item.key}
-                className="rounded-xl border border-white/15 bg-black/30 p-4 min-h-[140px]"
+                className="min-h-[140px] rounded-xl border border-white/15 bg-black/30 p-4"
               >
-                <h3 className="font-bebas tracking-widest text-primary text-xl mb-2">
+                <h3 className="mb-2 font-bebas text-xl tracking-widest text-primary">
                   {item.title}
                 </h3>
 
@@ -388,10 +446,10 @@ export default function HomeDashboardPage() {
                     onChange={e =>
                       setGuide(prev => ({ ...prev, [item.key]: e.target.value }))
                     }
-                    className="w-full h-24 bg-black/70 border border-white/10 rounded-lg text-xs text-white/70 p-2 resize-none focus:border-primary focus:outline-none font-mono"
+                    className="h-24 w-full resize-none rounded-lg border border-white/10 bg-black/70 p-2 text-xs font-mono text-white/70 outline-none focus:border-primary"
                   />
                 ) : (
-                  <p className="text-white/70 text-xs font-mono whitespace-pre-wrap leading-relaxed">
+                  <p className="whitespace-pre-wrap text-xs font-mono leading-relaxed text-white/70">
                     {guide[item.key]}
                   </p>
                 )}
