@@ -14,6 +14,17 @@ export default function ClaimPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const fromAd = sessionStorage.getItem('trial_from_ad');
+
+    // block direct access
+    if (!fromAd) {
+      navigate('/auth');
+      return;
+    }
+
+    // remove flag so refresh can't bypass
+    sessionStorage.removeItem('trial_from_ad');
+
     const claim = async () => {
       try {
         const { data } = await axios.post(
@@ -21,18 +32,24 @@ export default function ClaimPage() {
           {},
           { timeout: 15000 }
         );
+
         localStorage.setItem('schiro_token', data.token);
         setStatus('success');
         toast.success('30-minute trial access granted!');
-        setTimeout(() => window.location.href = '/', 2000);
+        setTimeout(() => (window.location.href = '/'), 2000);
+
       } catch (err) {
         const msg =
           err.response?.data?.detail ||
-          (err.code === 'ECONNABORTED' ? 'Request timed out.' : 'Unable to claim trial access.');
+          (err.code === 'ECONNABORTED'
+            ? 'Request timed out.'
+            : 'Unable to claim trial access.');
+
         setErrorMsg(msg);
         setStatus('error');
       }
     };
+
     claim();
   }, []);
 
