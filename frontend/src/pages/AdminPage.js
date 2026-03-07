@@ -73,7 +73,7 @@ const GROUP_CONFIG = {
 };
 
 export default function AdminPage() {
-  const { user, token, isMaster } = useAuth();
+  const { token, isMaster } = useAuth();
   const navigate = useNavigate();
 
   const [keys, setKeys] = useState([]);
@@ -191,7 +191,7 @@ export default function AdminPage() {
     }
   };
 
-  const deleteKey = async (keyId) => {
+  const deleteKey = async keyId => {
     try {
       await axios.delete(`${API}/admin/keys/${keyId}`, { headers });
       setKeys(prev => prev.filter(k => k.id !== keyId));
@@ -201,7 +201,7 @@ export default function AdminPage() {
     }
   };
 
-  const revealKey = async (keyId) => {
+  const revealKey = async keyId => {
     try {
       const res = await axios.get(`${API}/admin/keys/${keyId}/reveal`, {
         headers,
@@ -241,11 +241,7 @@ export default function AdminPage() {
 
   const updateTier = async (keyId, tier) => {
     try {
-      await axios.patch(
-        `${API}/admin/keys/${keyId}`,
-        { tier },
-        { headers },
-      );
+      await axios.patch(`${API}/admin/keys/${keyId}`, { tier }, { headers });
       await fetchKeys();
       setEditingTier(prev => ({ ...prev, [keyId]: false }));
       toast.success(`Tier updated to ${tier}`);
@@ -275,7 +271,7 @@ export default function AdminPage() {
     }
   };
 
-  const copyText = async (text) => {
+  const copyText = async text => {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
@@ -295,7 +291,7 @@ export default function AdminPage() {
     }
   };
 
-  const getExpiryStatus = (expiresAt) => {
+  const getExpiryStatus = expiresAt => {
     if (!expiresAt) return null;
     const expiry = new Date(expiresAt);
     const now = new Date();
@@ -325,7 +321,7 @@ export default function AdminPage() {
     };
   };
 
-  const toPhDatetimeLocal = (expiresAt) => {
+  const toPhDatetimeLocal = expiresAt => {
     if (!expiresAt) return '';
     const phString = new Date(expiresAt).toLocaleString('en-US', {
       timeZone: 'Asia/Manila',
@@ -338,7 +334,7 @@ export default function AdminPage() {
     )}T${pad(phDate.getHours())}:${pad(phDate.getMinutes())}`;
   };
 
-  const phLocalToUtc = (val) => {
+  const phLocalToUtc = val => {
     if (!val) return '';
     return new Date(`${val}+08:00`).toISOString();
   };
@@ -367,7 +363,7 @@ export default function AdminPage() {
 
   const KeyCard = ({ keyItem, idx }) => {
     const expiryStatus = getExpiryStatus(keyItem.expires_at);
-    const tier = keyItem.is_master ? 'master' : (keyItem.tier || 'free');
+    const tier = keyItem.is_master ? 'master' : keyItem.tier || 'free';
 
     return (
       <motion.div
@@ -431,6 +427,7 @@ export default function AdminPage() {
                   PH Time (UTC+8)
                 </span>
                 <Button
+                  type="button"
                   size="sm"
                   onClick={() => {
                     const el = document.getElementById(`expiry-input-${keyItem.id}`);
@@ -443,6 +440,7 @@ export default function AdminPage() {
                   Save
                 </Button>
                 <Button
+                  type="button"
                   size="sm"
                   variant="ghost"
                   onClick={() => updateExpiry(keyItem.id, '')}
@@ -451,6 +449,7 @@ export default function AdminPage() {
                   Remove
                 </Button>
                 <Button
+                  type="button"
                   size="sm"
                   variant="ghost"
                   onClick={() =>
@@ -477,6 +476,7 @@ export default function AdminPage() {
                   ))}
                 </select>
                 <Button
+                  type="button"
                   size="sm"
                   onClick={() => {
                     const el = document.getElementById(`tier-input-${keyItem.id}`);
@@ -489,6 +489,7 @@ export default function AdminPage() {
                   Save
                 </Button>
                 <Button
+                  type="button"
                   size="sm"
                   variant="ghost"
                   onClick={() =>
@@ -510,6 +511,7 @@ export default function AdminPage() {
                   className="bg-black/50 border-white/10 focus:border-primary text-white h-8 w-56 text-xs"
                   onKeyDown={e => {
                     if (e.key === 'Enter') {
+                      e.preventDefault();
                       const el = document.getElementById(`label-input-${keyItem.id}`);
                       const val = el?.value;
                       updateLabel(keyItem.id, val);
@@ -517,6 +519,7 @@ export default function AdminPage() {
                   }}
                 />
                 <Button
+                  type="button"
                   size="sm"
                   onClick={() => {
                     const el = document.getElementById(`label-input-${keyItem.id}`);
@@ -528,6 +531,7 @@ export default function AdminPage() {
                   Save
                 </Button>
                 <Button
+                  type="button"
                   size="sm"
                   variant="ghost"
                   onClick={() =>
@@ -548,6 +552,7 @@ export default function AdminPage() {
                   {revealedKeys[keyItem.id]}
                 </code>
                 <Button
+                  type="button"
                   size="sm"
                   variant="ghost"
                   onClick={() => copyText(revealedKeys[keyItem.id])}
@@ -556,6 +561,7 @@ export default function AdminPage() {
                   <Copy className="w-3.5 h-3.5" />
                 </Button>
                 <Button
+                  type="button"
                   size="sm"
                   variant="ghost"
                   onClick={() =>
@@ -572,6 +578,7 @@ export default function AdminPage() {
               </div>
             ) : (
               <Button
+                type="button"
                 size="sm"
                 variant="ghost"
                 onClick={() => revealKey(keyItem.id)}
@@ -583,6 +590,7 @@ export default function AdminPage() {
 
             {!keyItem.is_master && (
               <Button
+                type="button"
                 size="sm"
                 variant="ghost"
                 onClick={() =>
@@ -600,6 +608,7 @@ export default function AdminPage() {
 
             {!keyItem.is_master && (
               <Button
+                type="button"
                 size="sm"
                 variant="ghost"
                 onClick={() =>
@@ -616,6 +625,7 @@ export default function AdminPage() {
             )}
 
             <Button
+              type="button"
               size="sm"
               variant="ghost"
               onClick={() =>
@@ -627,6 +637,7 @@ export default function AdminPage() {
             </Button>
 
             <Button
+              type="button"
               size="sm"
               variant="ghost"
               onClick={() =>
@@ -643,6 +654,7 @@ export default function AdminPage() {
 
             {!keyItem.is_master && (
               <Button
+                type="button"
                 size="sm"
                 variant="ghost"
                 onClick={() => deleteKey(keyItem.id)}
@@ -692,6 +704,7 @@ export default function AdminPage() {
                           </span>
                         </div>
                         <Button
+                          type="button"
                           size="sm"
                           variant="ghost"
                           onClick={() => revokeSession(keyItem.id, session.session_id)}
@@ -786,7 +799,9 @@ export default function AdminPage() {
             <div className="font-bebas text-3xl tracking-widest text-green-400">
               {trialStatsLoading ? '...' : trialStats.active_now}
             </div>
-            <p className="text-[11px] text-white/25 mt-1">Auto-refreshes every 10 seconds</p>
+            <p className="text-[11px] text-white/25 mt-1">
+              Auto-refreshes every 10 seconds
+            </p>
           </div>
 
           <div className="bg-black/60 backdrop-blur-md border border-blue-500/20 rounded-2xl p-5">
@@ -827,6 +842,7 @@ export default function AdminPage() {
 
             <div className="flex items-center gap-2">
               <Button
+                type="button"
                 size="sm"
                 variant="ghost"
                 onClick={() => setShowRecentSessions(prev => !prev)}
@@ -846,6 +862,7 @@ export default function AdminPage() {
               </Button>
 
               <Button
+                type="button"
                 size="sm"
                 variant="ghost"
                 onClick={fetchTrialStats}
@@ -934,6 +951,7 @@ export default function AdminPage() {
 
                 <div className="flex gap-2">
                   <Button
+                    type="button"
                     size="sm"
                     variant="ghost"
                     onClick={() => copyText(newKeyValue)}
@@ -943,6 +961,7 @@ export default function AdminPage() {
                     <Copy className="w-4 h-4" />
                   </Button>
                   <Button
+                    type="button"
                     size="sm"
                     variant="ghost"
                     onClick={() => setNewKeyValue(null)}
@@ -976,7 +995,12 @@ export default function AdminPage() {
                 placeholder="e.g. John's Key"
                 className="bg-black/50 border-white/10 focus:border-primary text-white placeholder:text-white/30 h-11"
                 data-testid="create-key-label"
-                onKeyDown={e => e.key === 'Enter' && createKey()}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    createKey();
+                  }
+                }}
               />
             </div>
 
@@ -1027,6 +1051,7 @@ export default function AdminPage() {
             </div>
 
             <Button
+              type="button"
               onClick={createKey}
               disabled={creating}
               data-testid="create-key-btn"
