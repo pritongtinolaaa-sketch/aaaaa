@@ -1,72 +1,99 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Shield, Loader2, Clock } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Button } from '@/components/ui/button';
 import axios from 'axios';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const AuthContext = createContext(null);
+const API_BASE = process.env.REACT_APP_BACKEND_URL;
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('schiro_token'));
-  const [loading, setLoading] = useState(true);
+export default function ClaimPage() {
+  const [status, setStatus] = useState('claiming');
+  const [errorMsg, setErrorMsg] = useState('');
+  const navigate = useNavigate();
 
-  const validateToken = useCallback(async () => {
-    if (!token) { setLoading(false); return; }
-    try {
-      const res = await axios.get(`${API}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 10000,
-      });
-      setUser(res.data);
-    } catch {
-      localStorage.removeItem('schiro_token');
-      setToken(null);
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
+  useEffect(() => {
+    const claim = async () => {
+      try {
+        const { data } = await axios.post(
+          `${API_BASE}/api/free-tier/claim`,
+          {},
+          { timeout: 15000 }
+        );
 
-  useEffect(() => { validateToken(); }, [validateToken]);
+        // Store token the same way AuthContext does
+        localStorage.setItem('schiro_token', data.token);
 
-  const login = async (key) => {
-    // Trim and strip hidden zero-width chars commonly introduced by copy/paste.
-    const normalizedKey = String(key || '')
-      .replace(/[\u200B-\u200D\uFEFF]/g, '')
-      .trim();
-    const res = await axios.post(
-      `${API}/auth/login`,
-      { key: normalizedKey },
-      { timeout: 15000 },
-    );
-    localStorage.setItem('schiro_token', res.data.token);
-    setToken(res.data.token);
-    setUser(res.data.user);
-    return res.data;
-  };
+        setStatus('success');
+        toast.success('30-minute trial access granted!');
 
-  const logout = async () => {
-    try {
-      if (token) {
-        await axios.post(`${API}/auth/logout`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // Reload so AuthContext picks up the new token from localStorage
+        setTimeout(() => window.location.href = '/', 2000);
+      } catch (err) {
+        const msg =
+          err.response?.data?.detail ||
+          (err.code === 'ECONNABORTED' ? 'Request timed out.' : 'Unable to claim trial access.');
+        setErrorMsg(msg);
+        setStatus('error');
       }
-    } catch { /* ignore */ }
-    localStorage.removeItem('schiro_token');
-    setToken(null);
-    setUser(null);
-  };
+    };
 
-  // Helper tier booleans
-  const isMaster = user?.is_master === true;
-  const isPremium = user?.tier === 'premium' && !isMaster;
-  const isFree = user?.tier === 'free' && !isMaster;
+    claim();
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, isMaster, isPremium, isFree }}>
-      {children}
-    </AuthContext.Provider>
+    <div className="fixed inset-0 flex items-center justify-center bg-[#050505] overflow-hidden">
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse at center, rgba(229,9,20,0.06) 0%, transparent 60%)',
+        }}
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="relative z-10 w-full max-w-md px-6"
+      >
+        <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-md p-6 md:p-8 text-center space-y-4">
+          <Shield className="w-9 h-9 text-primary mx-auto" />
+          <h1 className="font-bebas text-4xl tracking-wider text-white">SCHIRO</h1>
+          <p className="text-primary font-bebas text-lg tracking-widest">COOKIE CHECKER</p>
+
+          {status === 'claiming' && (
+            <>
+              <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mt-4" />
+              <p className="text-white/50 text-sm font-mono">Activating your trial...</p>
+            </>
+          )}
+
+          {status === 'success' && (
+            <>
+              <Clock className="w-8 h-8 text-green-400 mx-auto mt-4" />
+              <p className="text-green-400 font-bebas text-2xl tracking-widest">ACCESS GRANTED</p>
+              <p className="text-white/50 text-sm font-mono">
+                You have 30 minutes of free access. Redirecting...
+              </p>
+            </>
+          )}
+
+          {status === 'error' && (
+            <>
+              <p className="text-red-400 font-bebas text-2xl tracking-widest">ACCESS DENIED</p>
+              <p className="text-white/50 text-sm font-mono">{errorMsg}</p>
+              <Button
+                onClick={() => navigate('/auth')}
+                className="w-full h-12 bg-primary hover:bg-red-700 text-white font-bebas tracking-widest text-lg uppercase rounded-sm mt-2"
+              >
+                BACK TO LOGIN
+              </Button>
+            </>
+          )}
+        </div>
+      </motion.div>
+    </div>
   );
 }
-
-export const useAuth = () => useContext(AuthContext);
