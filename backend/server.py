@@ -2097,9 +2097,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=[
-        "https://schiro.eu.cc",
-        "https://final-git-main-pritongtinolaaa-sketchs-projects.vercel.app",
-        "https://final-ip13njehu-pritongtinolaaa-sketchs-projects.vercel.app"
+        "aaaaa-nu-ebon.vercel.app",
+        "aaaaa-git-main-pritongtinolaaa-sketchs-projects.vercel.app",
+        "aaaaa-q9h6h5reu-pritongtinolaaa-sketchs-projects.vercel.app"
     ],
     allow_methods=["*"],
     allow_headers=["*"],
