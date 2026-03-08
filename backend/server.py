@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Header, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Header, Depends, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -16,6 +16,9 @@ import httpx
 from bs4 import BeautifulSoup
 import re
 import json
+from collections import defaultdict, deque
+from time import time
+from zoneinfo import ZoneInfo
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -101,6 +104,27 @@ async def get_current_user(authorization: str = Header(None)):
     token_str = authorization.split(" ")[1]
     try:
         payload = jwt.decode(token_str, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+
+        # --- Trial token handling ---
+        if payload.get("is_trial"):
+            session_id = payload.get("session_id")
+            trial_doc = await db.trial_sessions.find_one({"session_id": session_id})
+            if not trial_doc:
+                raise HTTPException(status_code=401, detail="Trial session not found")
+            expires_at = trial_doc.get("expires_at")
+            if expires_at:
+                expiry = datetime.fromisoformat(expires_at).replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) > expiry:
+                    raise HTTPException(status_code=401, detail="Trial session expired")
+            return {
+                "id": payload.get("key_id"),
+                "label": "Trial User",
+                "is_master": False,
+                "tier": "trial",
+                "session_id": session_id,
+            }
+
+        # --- Normal key handling ---
         key_doc = await db.access_keys.find_one({"id": payload["key_id"]}, {"_id": 0})
         if not key_doc:
             raise HTTPException(status_code=401, detail="Key not found")
@@ -125,6 +149,7 @@ async def get_current_user(authorization: str = Header(None)):
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+
 async def require_admin(authorization: str = Header(None)):
     user = await get_current_user(authorization)
     if not user.get("is_master"):
@@ -142,6 +167,37 @@ async def get_key_label(key_id: str) -> str:
     doc = await db.access_keys.find_one({"id": key_id}, {"_id": 0, "label": 1})
     return doc.get("label") if doc else ""
 
+
+RATE_LIMIT_WINDOW = 60  # seconds
+RATE_LIMIT_MAX = 20     # requests per minute
+rate_limit_store = defaultdict(deque)
+
+free_cooldown_store = {}
+FREE_COOLDOWN_SECONDS = 2.5
+
+def check_rate_limit(ip: str):
+    now = time()
+    q = rate_limit_store[ip]
+
+    while q and now - q[0] > RATE_LIMIT_WINDOW:
+        q.popleft()
+
+    if len(q) >= RATE_LIMIT_MAX:
+        raise HTTPException(status_code=429, detail="Too many requests. Slow down.")
+
+    q.append(now)
+
+def check_free_cooldown(ip: str):
+    now = time()
+    last = free_cooldown_store.get(ip)
+
+    if last and now - last < FREE_COOLDOWN_SECONDS:
+        raise HTTPException(
+            status_code=429,
+            detail="Please wait a moment before refreshing again."
+        )
+
+    free_cooldown_store[ip] = now
 
 # --- Cookie Parsing ---
 def parse_netscape_cookies(text):
@@ -725,6 +781,90 @@ async def login(data: KeyLogin):
         }
     }
 
+@api_router.post("/free-tier/claim")
+async def claim_free_tier(request: Request):
+    ip = request.client.host
+    now = datetime.now(timezone.utc)
+
+    # Block if active trial already exists for this IP
+    existing = await db.trial_sessions.find_one({
+        "ip": ip,
+        "expires_at": {"$gt": now.isoformat()}
+    })
+    if existing:
+        expires_at = datetime.fromisoformat(existing["expires_at"])
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        token = jwt.encode(
+            {
+                "key_id": existing["key_id"],
+                "session_id": existing["session_id"],
+                "is_master": False,
+                "is_trial": True,
+                "exp": expires_at,
+            },
+            JWT_SECRET,
+            algorithm=JWT_ALGORITHM,
+        )
+
+        return {
+            "token": token,
+            "user": {
+                "id": existing["key_id"],
+                "label": "Trial User",
+                "is_master": False,
+                "tier": "trial",
+            },
+        }
+
+    # Rate limit: max 3 claims per IP per hour
+    one_hour_ago = (now - timedelta(hours=1)).isoformat()
+    recent_claims = await db.trial_sessions.count_documents({
+        "ip": ip,
+        "created_at": {"$gte": one_hour_ago}
+    })
+    if recent_claims >= 3:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many trial requests. Please try again later."
+        )
+
+    session_id = str(uuid.uuid4())
+    trial_key_id = f"trial_{session_id}"
+    expires_at = now + timedelta(minutes=30)
+
+    await db.trial_sessions.insert_one({
+        "session_id": session_id,
+        "key_id": trial_key_id,
+        "ip": ip,
+        "created_at": now.isoformat(),
+        "expires_at": expires_at.isoformat(),
+    })
+
+    token = jwt.encode(
+        {
+            "key_id": trial_key_id,
+            "session_id": session_id,
+            "is_master": False,
+            "is_trial": True,
+            "exp": expires_at,
+        },
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHM,
+    )
+
+    return {
+        "token": token,
+        "user": {
+            "id": trial_key_id,
+            "label": "Trial User",
+            "is_master": False,
+            "tier": "trial",
+        },
+    }
+
+
 @api_router.post("/auth/logout")
 async def logout(user: dict = Depends(get_current_user)):
     await db.access_keys.update_one(
@@ -1080,9 +1220,9 @@ async def get_all_free_cookies_admin(
     elif status == "dead":
         query["is_alive"] = False
     if plan:
-        query["plan"] = {"$regex": plan, "$options": "i"}
+        query["plan"] = {"$regex": f"^{re.escape(plan.strip())}$", "$options": "i"}
     if country:
-        query["country"] = {"$regex": country, "$options": "i"}
+        query["country"] = {"$regex": f"^{re.escape(country.strip())}$", "$options": "i"}
 
     total = await db.free_cookies.count_documents(query)
     skip = (page - 1) * page_size
@@ -1160,6 +1300,7 @@ async def get_hidden_cookie_ids_for_user(user: dict):
 
 @api_router.get("/free-cookies")
 async def get_free_cookies(
+    request: Request,
     user: dict = Depends(get_current_user),
     page: int = 1,
     page_size: int = 20,
@@ -1167,65 +1308,157 @@ async def get_free_cookies(
     plan: str = "",
     country: str = ""
 ):
+    ip = request.client.host or "unknown"
+    check_rate_limit(ip)
+
     setting = await db.settings.find_one({"key": "free_cookies_limit"}, {"_id": 0})
     base_limit = setting.get("value", 10) if setting else 10
 
-    if user.get("is_master") or user.get("tier") == "premium":
-        sort_order = -1
-        max_cookies = 500
-    else:
-        sort_order = 1
-        max_cookies = base_limit
+    is_elevated = user.get("is_master") or user.get("tier") == "premium"
 
-    query = {}
+    if is_elevated:
+        page_size = min(page_size, 50)
+    else:
+        check_free_cooldown(ip)
+        page_size = min(page_size, 12)
 
     hidden_ids = await get_hidden_cookie_ids_for_user(user)
+
+    base_query = {}
     if hidden_ids:
-        query["id"] = {"$nin": list(hidden_ids)}
+        base_query["id"] = {"$nin": list(hidden_ids)}
+
+    # premium/master can access the full filtered dataset
+    if is_elevated:
+        query = dict(base_query)
+
+        if status == "alive":
+            query["is_alive"] = {"$ne": False}
+        elif status == "dead":
+            query["is_alive"] = False
+
+        if plan:
+            query["plan"] = {
+                "$regex": f"^{re.escape(plan.strip())}$",
+                "$options": "i"
+            }
+
+        if country:
+            query["country"] = {
+                "$regex": f"^{re.escape(country.strip())}$",
+                "$options": "i"
+            }
+
+        total = await db.free_cookies.count_documents(query)
+        skip = (page - 1) * page_size
+
+        if skip >= total:
+            return {
+                "cookies": [],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": max(1, -(-total // page_size)),
+            }
+
+        cookies = (
+            await db.free_cookies.find(query, {"_id": 0})
+            .sort("created_at", -1)
+            .skip(skip)
+            .limit(page_size)
+            .to_list(page_size)
+        )
+
+        return {
+            "cookies": cookies,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": max(1, -(-total // page_size)),
+        }
+
+    # free-tier users: only filter inside the first visible pool
+    visible_pool = (
+        await db.free_cookies.find(
+            base_query,
+            {"_id": 0, "id": 1, "plan": 1, "country": 1}
+        )
+        .sort("created_at", 1)
+        .limit(base_limit)
+        .to_list(base_limit)
+    )
+
+    visible_ids = [doc["id"] for doc in visible_pool]
+
+    if not visible_ids:
+        return {
+            "cookies": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": 1,
+            "available_plans": ["all"],
+            "available_countries": ["all"],
+        }
+
+    query = {"id": {"$in": visible_ids}}
 
     if status == "alive":
         query["is_alive"] = {"$ne": False}
     elif status == "dead":
         query["is_alive"] = False
+
     if plan:
-        query["plan"] = {"$regex": plan, "$options": "i"}
+        query["plan"] = {
+            "$regex": f"^{re.escape(plan.strip())}$",
+            "$options": "i"
+        }
+
     if country:
-        query["country"] = {"$regex": country, "$options": "i"}
+        query["country"] = {
+            "$regex": f"^{re.escape(country.strip())}$",
+            "$options": "i"
+        }
 
-    total_available = await db.free_cookies.count_documents(query)
-    total = min(total_available, max_cookies)
-
+    total = await db.free_cookies.count_documents(query)
     skip = (page - 1) * page_size
+
+    available_plans = sorted({doc.get("plan") for doc in visible_pool if doc.get("plan")})
+    available_countries = sorted({doc.get("country") for doc in visible_pool if doc.get("country")})
+
     if skip >= total:
         return {
             "cookies": [],
             "total": total,
             "page": page,
             "page_size": page_size,
-            "total_pages": -(-total // page_size)
+            "total_pages": max(1, -(-total // page_size)),
+            "available_plans": ["all", *available_plans],
+            "available_countries": ["all", *available_countries],
         }
-
-    effective_limit = min(page_size, total - skip)
 
     cookies = (
         await db.free_cookies.find(query, {"_id": 0})
-        .sort("created_at", sort_order)
+        .sort("created_at", 1)
         .skip(skip)
-        .limit(effective_limit)
-        .to_list(effective_limit)
+        .limit(page_size)
+        .to_list(page_size)
     )
 
-    if not user.get("is_master"):
-        for c in cookies:
-            c.pop("browser_cookies", None)
+    for c in cookies:
+        c.pop("browser_cookies", None)
+        c.pop("full_cookie", None)
 
     return {
         "cookies": cookies,
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": -(-total // page_size)
+        "total_pages": max(1, -(-total // page_size)),
+        "available_plans": ["all", *available_plans],
+        "available_countries": ["all", *available_countries],
     }
+    
 
 @api_router.post("/admin/free-cookies/refresh")
 async def force_refresh_tokens(user: dict = Depends(require_admin)):
@@ -1310,6 +1543,38 @@ async def get_total_cookie_count(user: dict = Depends(get_current_user)):
         "free": free_total,
         "admin": admin_total,
         "total": free_total + admin_total,
+    }
+
+@api_router.get("/admin/trial-stats")
+async def get_trial_stats(user: dict = Depends(require_admin)):
+    ph_tz = ZoneInfo("Asia/Manila")
+    now = datetime.now(ph_tz)
+
+    today_start = datetime(now.year, now.month, now.day, tzinfo=ph_tz)
+    last_24h = now - timedelta(hours=24)
+
+    active_now = await db.trial_sessions.count_documents({
+        "expires_at": {"$gt": now.isoformat()}
+    })
+
+    claimed_today = await db.trial_sessions.count_documents({
+        "created_at": {"$gte": today_start.isoformat()}
+    })
+
+    claimed_24h = await db.trial_sessions.count_documents({
+        "created_at": {"$gte": last_24h.isoformat()}
+    })
+
+    recent_sessions = await db.trial_sessions.find(
+        {},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(20).to_list(20)
+
+    return {
+        "active_now": active_now,
+        "claimed_today": claimed_today,
+        "claimed_24h": claimed_24h,
+        "recent_sessions": recent_sessions,
     }
 
 #{
@@ -1831,10 +2096,11 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=["https://schiro.eu.cc"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.on_event("startup")
 async def seed_master_key():
