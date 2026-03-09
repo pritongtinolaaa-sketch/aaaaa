@@ -320,8 +320,6 @@ export default function HomeDashboardPage() {
     }
   };
 
-  const tierLabel = isMaster ? 'Master' : isPremium ? 'Premium' : 'Free';
-
   const greetingName = useMemo(() => {
     const raw = String(user?.label || '').trim();
     if (!raw) return 'User';
@@ -351,8 +349,6 @@ export default function HomeDashboardPage() {
                       FREE
                     </Badge>
                   )}
-
-                  <span className="text-xs font-mono text-white/30">{tierLabel}</span>
                 </div>
 
                 <div className="mt-8 rounded-xl border border-green-500/20 bg-green-500/5 p-5">
