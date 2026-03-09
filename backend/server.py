@@ -2097,7 +2097,9 @@ app.add_middleware(
     allow_origins=[
         "https://aaaaa-nu-ebon.vercel.app",
         "https://aaaaa-git-main-pritongtinolaaa-sketchs-projects.vercel.app",
-        "https://aaaaa-q9h6h5reu-pritongtinolaaa-sketchs-projects.vercel.app"
+        "https://aaaaa-q9h6h5reu-pritongtinolaaa-sketchs-projects.vercel.app",
+        "https://www.schiro.dev",
+        "https://schiro.dev"
     ],
     allow_methods=["*"],
     allow_headers=["*"],
