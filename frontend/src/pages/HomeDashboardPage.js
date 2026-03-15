@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Cookie } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const DEFAULT_UPGRADE_POPUP_MESSAGE =
+  'Upgrade to premium to unlock premium cookie access. Contact the master key owner for your upgrade key.';
 
 const DEFAULT_GUIDE = {
   pc: 'Open Cookie Checker and paste/upload cookies, then review results.',
@@ -205,12 +214,22 @@ export default function HomeDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [noticeText, setNoticeText] = useState('');
   const [isEditingNotice, setIsEditingNotice] = useState(false);
+  const [isUpgradeDialogOpen, setIsUpgradeDialogOpen] = useState(false);
+  const [upgradePopupMessage, setUpgradePopupMessage] = useState(
+    DEFAULT_UPGRADE_POPUP_MESSAGE,
+  );
+  const [savedUpgradePopupMessage, setSavedUpgradePopupMessage] = useState(
+    DEFAULT_UPGRADE_POPUP_MESSAGE,
+  );
+  const [isEditingUpgradePopupMessage, setIsEditingUpgradePopupMessage] =
+    useState(false);
   const [guide, setGuide] = useState(DEFAULT_GUIDE);
   const [isEditingGuide, setIsEditingGuide] = useState(false);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
   const isMaster = user?.is_master === true;
   const isPremium = user?.tier === 'premium' && !isMaster;
+  const isFreeTier = user?.tier === 'free' && !isMaster;
   const canAccessAdmin = isMaster || isPremium;
 
   useEffect(() => {
@@ -287,6 +306,19 @@ export default function HomeDashboardPage() {
       .catch(() => {});
   }, [token, headers]);
 
+  useEffect(() => {
+    if (!token) return;
+    axios
+      .get(`${API}/admin/upgrade-popup-message`, { headers })
+      .then(res => {
+        const message =
+          String(res.data?.message || '').trim() || DEFAULT_UPGRADE_POPUP_MESSAGE;
+        setUpgradePopupMessage(message);
+        setSavedUpgradePopupMessage(message);
+      })
+      .catch(() => {});
+  }, [token, headers]);
+
   const handleSaveNotice = async () => {
     try {
       await axios.post(`${API}/admin/notice`, { message: noticeText }, { headers });
@@ -317,6 +349,25 @@ export default function HomeDashboardPage() {
       toast.success('Guide updated');
     } catch {
       toast.error('Failed to update guide');
+    }
+  };
+
+  const handleSaveUpgradePopupMessage = async () => {
+    const value = String(upgradePopupMessage || '').trim();
+    const finalValue = value || DEFAULT_UPGRADE_POPUP_MESSAGE;
+    try {
+      await axios.post(
+        `${API}/admin/upgrade-popup-message`,
+        { message: finalValue },
+        { headers },
+      );
+
+      setUpgradePopupMessage(finalValue);
+      setSavedUpgradePopupMessage(finalValue);
+      setIsEditingUpgradePopupMessage(false);
+      toast.success('Upgrade popup message saved');
+    } catch {
+      toast.error('Failed to save upgrade popup message');
     }
   };
 
@@ -372,13 +423,21 @@ export default function HomeDashboardPage() {
 
                       {!canAccessAdmin && (
                         <div className="mt-3 space-y-1 border-t border-white/10 pt-3">
-                          <p className="text-xs font-mono text-white/40">
-                            Free tier cookies: <span className="text-green-400">30</span>
-                          </p>
-                          <p className="text-xs font-mono text-white/40">
-                            Premium Tier cookies:{' '}
-                            <span className="text-purple-400">{grandTotal.total}</span>
-                          </p>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-mono text-white/40">
+                              Premium Tier cookies:{' '}
+                              <span className="text-purple-400">{grandTotal.total}</span>
+                            </p>
+
+                            {isFreeTier && (
+                              <button
+                                onClick={() => setIsUpgradeDialogOpen(true)}
+                                className="rounded-md border border-primary/50 bg-primary/10 px-2 py-1 text-[10px] font-mono uppercase tracking-wide text-primary transition hover:bg-primary/20"
+                              >
+                                Upgrade
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </>
@@ -422,6 +481,64 @@ export default function HomeDashboardPage() {
                     <p className="whitespace-pre-wrap text-center text-sm font-mono leading-relaxed text-white/75">
                       {noticeText || 'No notice posted.'}
                     </p>
+                  </div>
+                )}
+
+                {isMaster && (
+                  <div className="mt-4 border-t border-white/10 pt-4">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-mono uppercase tracking-wide text-white/50">
+                        Upgrade Popup Message
+                      </span>
+
+                      {isEditingUpgradePopupMessage ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleSaveUpgradePopupMessage}
+                            className="text-xs font-mono text-green-400 hover:text-green-300"
+                          >
+                            SAVE
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsEditingUpgradePopupMessage(false);
+                              setUpgradePopupMessage(savedUpgradePopupMessage);
+                            }}
+                            className="text-xs font-mono text-white/30 hover:text-white/60"
+                          >
+                            CANCEL
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setIsUpgradeDialogOpen(true)}
+                            className="text-xs font-mono text-primary/80 hover:text-primary"
+                          >
+                            PREVIEW
+                          </button>
+                          <button
+                            onClick={() => setIsEditingUpgradePopupMessage(true)}
+                            className="text-xs font-mono text-white/30 hover:text-white/60"
+                          >
+                            EDIT
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {isEditingUpgradePopupMessage ? (
+                      <textarea
+                        value={upgradePopupMessage}
+                        onChange={e => setUpgradePopupMessage(e.target.value)}
+                        className="min-h-[80px] w-full resize-none rounded-lg border border-white/10 bg-black/80 p-3 text-xs font-mono text-white/70 outline-none focus:border-primary"
+                        placeholder="Type upgrade popup message..."
+                      />
+                    ) : (
+                      <p className="whitespace-pre-wrap text-xs font-mono leading-relaxed text-white/55">
+                        {upgradePopupMessage}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -497,6 +614,19 @@ export default function HomeDashboardPage() {
             ))}
           </div>
         </motion.div>
+
+        <Dialog open={isUpgradeDialogOpen} onOpenChange={setIsUpgradeDialogOpen}>
+          <DialogContent className="border-white/15 bg-[#0b0b0b] text-white sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-bebas text-2xl tracking-widest text-primary">
+                UPGRADE ACCESS
+              </DialogTitle>
+              <DialogDescription className="font-mono text-xs leading-relaxed text-white/70">
+                {upgradePopupMessage}
+              </DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
