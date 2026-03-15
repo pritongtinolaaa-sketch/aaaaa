@@ -621,7 +621,7 @@ export default function HomeDashboardPage() {
               <DialogTitle className="font-bebas text-2xl tracking-widest text-primary">
                 UPGRADE ACCESS
               </DialogTitle>
-              <DialogDescription className="font-mono text-sm leading-relaxed text-white/75 sm:text-base">
+              <DialogDescription className="whitespace-pre-line font-mono text-sm leading-relaxed text-white/75 sm:text-base">
                 {upgradePopupMessage}
               </DialogDescription>
             </DialogHeader>
