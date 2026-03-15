@@ -432,9 +432,9 @@ export default function HomeDashboardPage() {
                             {isFreeTier && (
                               <button
                                 onClick={() => setIsUpgradeDialogOpen(true)}
-                                className="rounded-md border border-primary/50 bg-primary/10 px-2 py-1 text-[10px] font-mono uppercase tracking-wide text-primary transition hover:bg-primary/20"
+                                className="animate-pulse rounded-lg border border-amber-200/80 bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 px-3 py-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-amber-950 shadow-[0_0_16px_rgba(252,211,77,0.65),inset_0_1px_0_rgba(255,255,255,0.8)] transition hover:scale-105 hover:from-amber-200 hover:to-yellow-100 hover:shadow-[0_0_24px_rgba(252,211,77,0.9)]"
                               >
-                                Upgrade
+                                Upgrade Now
                               </button>
                             )}
                           </div>
