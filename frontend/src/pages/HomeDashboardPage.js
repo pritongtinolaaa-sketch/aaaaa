@@ -230,6 +230,7 @@ export default function HomeDashboardPage() {
   const isMaster = user?.is_master === true;
   const isPremium = user?.tier === 'premium' && !isMaster;
   const isFreeTier = user?.tier === 'free' && !isMaster;
+  const isTrialTier = user?.tier === 'trial' && !isMaster;
   const canAccessAdmin = isMaster || isPremium;
 
   useEffect(() => {
@@ -429,7 +430,7 @@ export default function HomeDashboardPage() {
                               <span className="text-purple-400">{grandTotal.total}</span>
                             </p>
 
-                            {isFreeTier && (
+                            {(isFreeTier || isTrialTier) && (
                               <button
                                 onClick={() => setIsUpgradeDialogOpen(true)}
                                 className="rounded-lg border border-amber-200/80 bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 px-3 py-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-amber-950 shadow-[0_0_16px_rgba(252,211,77,0.65),inset_0_1px_0_rgba(255,255,255,0.8)] transition hover:scale-105 hover:from-amber-200 hover:to-yellow-100 hover:shadow-[0_0_24px_rgba(252,211,77,0.9)]"
