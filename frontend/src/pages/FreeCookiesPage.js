@@ -47,7 +47,7 @@ function CopyBtn({ text, testId }) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
-    } catch {
+    } catch (err) {
       const ta = document.createElement('textarea');
       ta.value = text;
       ta.style.position = 'fixed';
@@ -383,8 +383,8 @@ function FreeCookieModal({
       setCurrentNftokenLink(res.data.nftoken_link);
       setLastRefreshed(new Date().toISOString());
       toast.success('Token refreshed!');
-    } catch {
-      toast.error('Failed to refresh token');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to refresh token');
     } finally {
       setTokenRefreshing(false);
     }
@@ -881,7 +881,7 @@ export default function FreeCookiesPage() {
       if (typeof res.data.limit === 'number') {
         setDisplayLimit(res.data.limit);
       }
-    } catch {
+    } catch (err) {
       // ignore
     }
   }, [headers, isAdmin]);
@@ -939,7 +939,7 @@ export default function FreeCookiesPage() {
     try {
       const res = await axios.get(`${API}/favorites/ids`, { headers });
       setFavoriteIds(new Set(res.data.favorites || []));
-    } catch {
+    } catch (err) {
       // ignore
     }
   }, [canFavorite, headers]);
@@ -966,7 +966,7 @@ export default function FreeCookiesPage() {
         setFavoriteCookiesMaster(all);
         setFavoriteCookiesOthers([]);
       }
-    } catch {
+    } catch (err) {
       toast.error('Failed to load favorites');
     } finally {
       setFavoritesLoading(false);
@@ -1426,3 +1426,5 @@ export default function FreeCookiesPage() {
     </div>
   );
 }
+
+
