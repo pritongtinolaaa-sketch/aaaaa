@@ -10,6 +10,8 @@ import CookieResultCard from '@/components/CookieResultCard';
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const STUCK_WARNING_MS = 90 * 1000;
+const POLL_ERROR_THRESHOLD = 3;
 
 export default function DashboardPage() {
   const { token } = useAuth();
@@ -18,10 +20,14 @@ export default function DashboardPage() {
   const [checking, setChecking] = useState(false);
   const [results, setResults] = useState(null);
   const [progress, setProgress] = useState(null);
+  const [showStuckWarning, setShowStuckWarning] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const fileInputRef = useRef(null);
   const pollRef = useRef(null);
+  const pollStartedAtRef = useRef(0);
+  const pollErrorCountRef = useRef(0);
+  const stuckWarningShownRef = useRef(false);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
@@ -38,10 +44,17 @@ export default function DashboardPage() {
 
   const startPolling = useCallback((jobId) => {
     stopPolling();
+    pollStartedAtRef.current = Date.now();
+    pollErrorCountRef.current = 0;
+    stuckWarningShownRef.current = false;
+    setShowStuckWarning(false);
+
     pollRef.current = setInterval(async () => {
       try {
         const res = await axios.get(`${API}/check/${jobId}/status`, { headers });
         const data = res.data;
+        pollErrorCountRef.current = 0;
+
         setProgress({
           total: data.total,
           checked: data.checked_count,
@@ -49,15 +62,39 @@ export default function DashboardPage() {
           expired: data.expired_count,
           invalid: data.invalid_count,
         });
+
+        const elapsed = Date.now() - pollStartedAtRef.current;
+        if (
+          !stuckWarningShownRef.current &&
+          data.status !== 'done' &&
+          data.checked_count < data.total &&
+          elapsed >= STUCK_WARNING_MS
+        ) {
+          stuckWarningShownRef.current = true;
+          setShowStuckWarning(true);
+          toast.warning('Still checking... this is taking longer than usual.');
+        }
+
         if (data.status === 'done') {
           stopPolling();
           setResults(data);
           setProgress(null);
           setChecking(false);
+          setShowStuckWarning(false);
           toast.success(`Done! ${data.valid_count} valid, ${data.expired_count} expired, ${data.invalid_count} invalid out of ${data.total}`);
         }
-      } catch {
-        // ignore poll errors
+      } catch (err) {
+        pollErrorCountRef.current += 1;
+        if (pollErrorCountRef.current >= POLL_ERROR_THRESHOLD) {
+          stopPolling();
+          setChecking(false);
+          setProgress(null);
+          setShowStuckWarning(false);
+          toast.error(
+            err.response?.data?.detail ||
+              'Lost connection while checking cookies. Please try again.',
+          );
+        }
       }
     }, 2000);
   }, [headers, stopPolling]); // eslint-disable-line
@@ -83,6 +120,7 @@ export default function DashboardPage() {
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Check failed');
       setChecking(false);
+      setShowStuckWarning(false);
     }
   };
 
@@ -112,6 +150,7 @@ export default function DashboardPage() {
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Check failed');
       setChecking(false);
+      setShowStuckWarning(false);
     }
   };
 
@@ -440,6 +479,11 @@ export default function DashboardPage() {
                   <span className="text-yellow-400">{progress.invalid} Invalid</span>
                   <span className="text-white/30 ml-auto">{progressPercent}%</span>
                 </div>
+                {showStuckWarning && (
+                  <p className="mt-3 text-xs text-yellow-400/90 font-mono">
+                    This check is taking longer than usual. Please wait a bit more.
+                  </p>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
