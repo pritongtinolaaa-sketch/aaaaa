@@ -544,6 +544,54 @@ async def get_browser_data(cookies: dict):
             except Exception as e:
                 logger.warning(f"Account page error: {e}")
 
+            # --- Fetch all profiles from the profiles management page ---
+            try:
+                await page.goto("https://www.netflix.com/profiles/manage", timeout=20000)
+                await page.wait_for_load_state("domcontentloaded", timeout=10000)
+                await page.wait_for_timeout(2000)
+
+                profiles_from_page = await page.evaluate("""
+                    () => {
+                        try {
+                            const d = window.netflix?.appContext?.state?.models?.profiles?.data;
+                            if (d && d.length > 0)
+                                return d.map(p => p.firstName || p.profileName || '').filter(Boolean);
+                        } catch(e) {}
+                        try {
+                            const d = window.netflix?.reactContext?.models?.profiles?.data;
+                            if (d && d.length > 0)
+                                return d.map(p => p.firstName || p.profileName || '').filter(Boolean);
+                        } catch(e) {}
+                        const els = document.querySelectorAll('[data-uia="profile-name"], .profile-name, .profile-link-name, .choose-profile .profile-name');
+                        if (els.length > 0)
+                            return Array.from(els).map(el => el.textContent.trim()).filter(Boolean);
+                        return null;
+                    }
+                """)
+
+                if profiles_from_page and len(profiles_from_page) > len(info['profiles']):
+                    info['profiles'] = profiles_from_page
+                    logger.info(f"Profiles from manage page: {info['profiles']}")
+
+                if not info['profiles']:
+                    manage_html = await page.content()
+                    ctx_match2 = re.search(r'reactContext\s*=\s*({.*?});', manage_html, re.DOTALL)
+                    if ctx_match2:
+                        try:
+                            raw2 = ctx_match2.group(1)
+                            raw2 = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), raw2)
+                            raw2 = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw2)
+                            ctx2 = json.loads(raw2)
+                            pd2 = ctx2.get('models', {}).get('profiles', {}).get('data', [])
+                            if pd2:
+                                info['profiles'] = [pr.get('firstName', pr.get('profileName', 'Profile')) for pr in pd2 if isinstance(pr, dict)]
+                                logger.info(f"Profiles from manage reactContext: {info['profiles']}")
+                        except Exception as e:
+                            logger.warning(f"Profiles manage reactContext parse error: {e}")
+
+            except Exception as e:
+                logger.warning(f"Profiles manage page error: {e}")
+
             await browser.close()
             return True, browser_cookies_str, browser_cookies_dict, info
 
