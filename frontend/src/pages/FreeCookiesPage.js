@@ -79,7 +79,7 @@ function CopyBtn({ text, testId }) {
   );
 }
 
-function InfoRow({ icon, label, value }) {
+function InfoRow({ icon, label, value, valueClassName = 'truncate' }) {
   if (!value) return null;
 
   return (
@@ -88,7 +88,7 @@ function InfoRow({ icon, label, value }) {
       <span className="text-white/40 text-xs uppercase tracking-wide w-24 shrink-0">
         {label}
       </span>
-      <span className="text-white/90 text-sm font-medium truncate">
+      <span className={`text-white/90 text-sm font-medium ${valueClassName}`}>
         {value}
       </span>
     </div>
@@ -507,6 +507,7 @@ function FreeCookieModal({
                   icon={<Users className="w-4 h-4" />}
                   label="Profiles"
                   value={cookie.profiles.join(', ')}
+                  valueClassName="whitespace-normal break-words"
                 />
               )}
             </div>

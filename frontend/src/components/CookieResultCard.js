@@ -26,13 +26,13 @@ const statusConfig = {
   },
 };
 
-function InfoRow({ icon, label, value }) {
+function InfoRow({ icon, label, value, valueClassName = 'truncate' }) {
   if (!value) return null;
   return (
     <div className="flex items-center gap-3">
       <span className="text-white/20">{icon}</span>
       <span className="text-white/40 text-xs uppercase tracking-wide w-24 shrink-0">{label}</span>
-      <span className="text-white/90 text-sm font-medium truncate">{value}</span>
+      <span className={`text-white/90 text-sm font-medium ${valueClassName}`}>{value}</span>
     </div>
   );
 }
@@ -167,7 +167,12 @@ export default function CookieResultCard({ result, index }) {
             <InfoRow icon={<Calendar className="w-4 h-4" />} label="Since" value={result.member_since} />
             <InfoRow icon={<Clock className="w-4 h-4" />} label="Next Bill" value={result.next_billing} />
             {result.profiles && result.profiles.length > 0 && (
-              <InfoRow icon={<Users className="w-4 h-4" />} label="Profiles" value={result.profiles.join(', ')} />
+              <InfoRow
+                icon={<Users className="w-4 h-4" />}
+                label="Profiles"
+                value={result.profiles.join(', ')}
+                valueClassName="whitespace-normal break-words"
+              />
             )}
           </>
         ) : (
