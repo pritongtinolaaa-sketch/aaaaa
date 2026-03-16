@@ -80,7 +80,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
 
   const [newLabel, setNewLabel] = useState('');
-  const [newMaxDevices, setNewMaxDevices] = useState(1);
+  const [newMaxDevices, setNewMaxDevices] = useState('1');
   const [customKey, setCustomKey] = useState('');
   const [newTier, setNewTier] = useState('free');
   const [creating, setCreating] = useState(false);
@@ -153,13 +153,18 @@ export default function AdminPage() {
       return;
     }
 
+    const parsedMaxDevices = Number.parseInt(String(newMaxDevices).trim(), 10);
+    const safeMaxDevices = Number.isNaN(parsedMaxDevices)
+      ? 1
+      : Math.min(100, Math.max(1, parsedMaxDevices));
+
     setCreating(true);
     try {
       const res = await axios.post(
         `${API}/admin/keys`,
         {
           label: newLabel,
-          max_devices: newMaxDevices,
+          max_devices: safeMaxDevices,
           custom_key: customKey.trim() || undefined,
           tier: newTier,
         },
@@ -168,7 +173,7 @@ export default function AdminPage() {
 
       setNewKeyValue(res.data.key_value);
       setNewLabel('');
-      setNewMaxDevices(1);
+      setNewMaxDevices('1');
       setCustomKey('');
       setNewTier('free');
 
@@ -1016,7 +1021,24 @@ export default function AdminPage() {
                 min={1}
                 max={100}
                 value={newMaxDevices}
-                onChange={e => setNewMaxDevices(parseInt(e.target.value, 10) || 1)}
+                onChange={e => {
+                  const nextValue = e.target.value;
+                  if (nextValue === '') {
+                    setNewMaxDevices('');
+                    return;
+                  }
+
+                  if (/^\d+$/.test(nextValue)) {
+                    setNewMaxDevices(nextValue);
+                  }
+                }}
+                onBlur={() => {
+                  const parsed = Number.parseInt(String(newMaxDevices).trim(), 10);
+                  const safeValue = Number.isNaN(parsed)
+                    ? 1
+                    : Math.min(100, Math.max(1, parsed));
+                  setNewMaxDevices(String(safeValue));
+                }}
                 className="bg-black/50 border-white/10 focus:border-primary text-white h-11"
                 data-testid="create-key-devices"
               />

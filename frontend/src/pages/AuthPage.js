@@ -8,6 +8,7 @@ import { Shield, Key, Loader2, Gift } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const LINKVERTISE_URL = 'https://link-hub.net/4075828/ngOtBP408Mcl';
+const ACCESS_KEY_MAX_LENGTH = 32;
 
 export default function AuthPage() {
   const [accessKey, setAccessKey] = useState('');
@@ -17,10 +18,11 @@ export default function AuthPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!accessKey.trim()) return;
+    const normalizedAccessKey = accessKey.trim().slice(0, ACCESS_KEY_MAX_LENGTH);
+    if (!normalizedAccessKey) return;
     setSubmitting(true);
     try {
-      await login(accessKey);
+      await login(normalizedAccessKey);
       toast.success('Access granted');
       navigate('/');
     } catch (err) {
@@ -79,7 +81,10 @@ export default function AuthPage() {
                 type="password"
                 placeholder="Enter access key"
                 value={accessKey}
-                onChange={(e) => setAccessKey(e.target.value)}
+                onChange={(e) =>
+                  setAccessKey(e.target.value.slice(0, ACCESS_KEY_MAX_LENGTH))
+                }
+                maxLength={ACCESS_KEY_MAX_LENGTH}
                 required
                 autoComplete="off"
                 className="pl-10 bg-black/50 border-white/10 focus:border-primary focus:ring-1 focus:ring-primary/50 text-white placeholder:text-white/30 rounded-sm h-12 font-mono"
