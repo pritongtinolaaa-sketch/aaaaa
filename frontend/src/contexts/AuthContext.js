@@ -24,10 +24,15 @@ export function AuthProvider({ children }) {
         timeout: 10000,
       });
       setUser(res.data);
-    } catch {
-      localStorage.removeItem('schiro_token');
-      setToken(null);
-      setUser(null);
+    } catch (err) {
+      const status = err?.response?.status;
+      const shouldLogout = status === 401 || status === 403;
+
+      if (shouldLogout) {
+        localStorage.removeItem('schiro_token');
+        setToken(null);
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }
