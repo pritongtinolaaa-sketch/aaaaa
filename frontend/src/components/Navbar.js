@@ -255,12 +255,14 @@ export default function Navbar() {
             label="Dashboard"
             testId="nav-dashboard-link"
           />
-          <NavLink
-            to="/checker"
-            icon={Terminal}
-            label="Cookie Checker"
-            testId="nav-cookie-checker-link"
-          />
+          {isMaster && (
+            <NavLink
+              to="/checker"
+              icon={Terminal}
+              label="Cookie Checker"
+              testId="nav-cookie-checker-link"
+            />
+          )}
           <NavLink
             to="/free-cookies"
             icon={Cookie}
@@ -340,12 +342,14 @@ export default function Navbar() {
               label="Dashboard"
               testId="nav-dashboard-link-mobile"
             />
-            <NavLink
-              to="/checker"
-              icon={Terminal}
-              label="Cookie Checker"
-              testId="nav-cookie-checker-link-mobile"
-            />
+            {isMaster && (
+              <NavLink
+                to="/checker"
+                icon={Terminal}
+                label="Cookie Checker"
+                testId="nav-cookie-checker-link-mobile"
+              />
+            )}
             <NavLink
               to="/free-cookies"
               icon={Cookie}
