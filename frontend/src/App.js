@@ -77,7 +77,7 @@ function AppLayout() {
         <Routes>
           <Route path="/claim" element={<ClaimPage />} />
           <Route path="/" element={<ProtectedRoute><HomeDashboardPage /></ProtectedRoute>} />
-          <Route path="/checker" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/checker" element={<MasterRoute><DashboardPage /></MasterRoute>} />
           <Route path="/admin" element={<MasterRoute><AdminPage /></MasterRoute>} />
           <Route path="/admin/logs" element={<MasterRoute><AdminLogsPage /></MasterRoute>} />
           <Route path="/admin/cookies" element={<AdminCookiesRoute><AdminCookiesPage /></AdminCookiesRoute>} />
