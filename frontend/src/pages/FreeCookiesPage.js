@@ -384,6 +384,14 @@ function FreeCookieModal({
       setLastRefreshed(new Date().toISOString());
       toast.success('Token refreshed!');
     } catch (err) {
+      if (err.response?.status === 404) {
+        toast.error('Cookie no longer exists. Refreshing list...');
+        if (typeof onUpdated === 'function') {
+          onUpdated();
+        }
+        onClose();
+        return;
+      }
       toast.error(err.response?.data?.detail || 'Failed to refresh token');
     } finally {
       setTokenRefreshing(false);
@@ -847,21 +855,44 @@ export default function FreeCookiesPage() {
     setRefreshing(true);
 
     try {
+      if (isAdmin) {
+        const res = await axios.post(`${API}/admin/free-cookies/refresh`, {}, { headers });
+        toast.success(res.data?.message || 'Free cookie tokens refreshed');
+        await fetchCookies(page, filters);
+        return;
+      }
+
       const batchSize = 25;
-      const totalCookies = cookies.length;
+      const freeCookies = cookies.filter(cookie => cookie.source !== 'admin');
+      const totalCookies = freeCookies.length;
+
+      let missingCount = 0;
 
       for (let i = 0; i < totalCookies; i += batchSize) {
-        const batch = cookies.slice(i, i + batchSize);
+        const batch = freeCookies.slice(i, i + batchSize);
 
-        await Promise.all(
+        const results = await Promise.allSettled(
           batch.map(cookie => {
             const endpoint = `${API}/free-cookies/${cookie.id}/refresh-token`;
             return axios.post(endpoint, {}, { headers });
           }),
         );
+
+        results.forEach(result => {
+          if (
+            result.status === 'rejected' &&
+            result.reason?.response?.status === 404
+          ) {
+            missingCount += 1;
+          }
+        });
       }
 
-      toast.success('All tokens refreshed');
+      if (missingCount > 0) {
+        toast.error(`${missingCount} cookie(s) were removed and skipped during refresh`);
+      } else {
+        toast.success('All tokens refreshed');
+      }
       await fetchCookies(page, filters);
     } catch (err) {
       toast.error(
