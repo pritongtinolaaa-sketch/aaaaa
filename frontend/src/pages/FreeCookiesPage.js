@@ -716,6 +716,7 @@ export default function FreeCookiesPage() {
   const [limitInput, setLimitInput] = useState('');
   const [savingLimit, setSavingLimit] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [deletingDead, setDeletingDead] = useState(false);
   const [selectedCookie, setSelectedCookie] = useState(null);
   const [selectedGlobalIndex, setSelectedGlobalIndex] = useState(null);
 
@@ -868,6 +869,53 @@ export default function FreeCookiesPage() {
       );
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const deleteDeadCookies = async () => {
+    if (!isAdmin) return;
+
+    if (!window.confirm('Delete all free cookies marked as dead?')) return;
+
+    setDeletingDead(true);
+
+    try {
+      const res = await axios.delete(`${API}/admin/free-cookies/dead`, {
+        headers,
+      });
+
+      toast.success(
+        res.data?.message || 'Deleted dead free cookies',
+      );
+
+      if (selectedCookie?.source !== 'admin' && selectedCookie?.is_alive === false) {
+        setSelectedCookie(null);
+        setSelectedGlobalIndex(null);
+      }
+
+      setCookies(prev => prev.filter(cookie => cookie.is_alive !== false));
+      setFavoriteCookiesMaster(prev =>
+        prev.filter(
+          cookie => cookie.source === 'admin' || cookie.is_alive !== false,
+        ),
+      );
+      setFavoriteCookiesOthers(prev =>
+        prev.filter(
+          cookie => cookie.source === 'admin' || cookie.is_alive !== false,
+        ),
+      );
+
+      await fetchCookies(page, filters);
+
+      if (activeTab === 'favorites') {
+        await fetchFavorites();
+      }
+    } catch (err) {
+      toast.error(
+        err.response?.data?.detail || 'Failed to delete dead free cookies',
+      );
+    } finally {
+      setDeletingDead(false);
     }
   };
 
@@ -1199,20 +1247,34 @@ export default function FreeCookiesPage() {
             </div>
 
             <div className="flex flex-col items-start md:items-end gap-2">
-              <Button
-                onClick={refreshTokens}
-                disabled={refreshing}
-                className="bg-green-500/20 hover:bg-green-500/30 text-green-100 border border-green-500/40 h-9 px-4 text-xs font-bebas tracking-widest uppercase flex items-center gap-2"
-              >
-                {refreshing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4" />
-                )}
-                REFRESH TOKENS
-              </Button>
+              <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                <Button
+                  onClick={refreshTokens}
+                  disabled={refreshing || deletingDead}
+                  className="bg-green-500/20 hover:bg-green-500/30 text-green-100 border border-green-500/40 h-9 px-4 text-xs font-bebas tracking-widest uppercase flex items-center gap-2"
+                >
+                  {refreshing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  REFRESH TOKENS
+                </Button>
+                <Button
+                  onClick={deleteDeadCookies}
+                  disabled={refreshing || deletingDead}
+                  className="bg-red-500/15 hover:bg-red-500/25 text-red-100 border border-red-500/40 h-9 px-4 text-xs font-bebas tracking-widest uppercase flex items-center gap-2"
+                >
+                  {deletingDead ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  DELETE DEAD
+                </Button>
+              </div>
               <span className="text-[11px] text-white/40">
-                This will try to re-generate NFToken for all free cookies.
+                Refresh re-generates NFToken. Delete dead removes free cookies already marked dead.
               </span>
             </div>
           </div>
