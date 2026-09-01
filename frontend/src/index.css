@@ -4,6 +4,24 @@
 @tailwind components;
 @tailwind utilities;
 
+.navbar-desktop-links {
+  display: none;
+}
+
+.navbar-mobile-toggle {
+  display: flex;
+}
+
+@media (min-width: 768px) {
+  .navbar-desktop-links {
+    display: flex;
+  }
+
+  .navbar-mobile-toggle {
+    display: none;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 2%;

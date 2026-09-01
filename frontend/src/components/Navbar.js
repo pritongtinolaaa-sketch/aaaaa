@@ -248,7 +248,7 @@ export default function Navbar() {
           <span className="font-bebas text-xl tracking-wider text-white">SCHIRO</span>
         </Link>
 
-        <div className="hidden items-center gap-1 md:flex">
+        <div className="navbar-desktop-links items-center gap-1">
           <NavLink
             to="/"
             icon={LayoutDashboard}
@@ -324,7 +324,7 @@ export default function Navbar() {
         <button
           onClick={() => setOpen(!open)}
           data-testid="nav-mobile-toggle"
-          className="flex h-10 w-10 items-center justify-center rounded-sm text-white/60 transition-colors hover:bg-white/5 hover:text-white md:hidden"
+          className="navbar-mobile-toggle flex h-10 w-10 items-center justify-center rounded-sm text-white/60 transition-colors hover:bg-white/5 hover:text-white"
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
