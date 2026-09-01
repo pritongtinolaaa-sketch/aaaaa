@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import axios from 'axios';
 
-const API_BASE = process.env.REACT_APP_BACKEND_URL;
+const API_BASE = process.env.REACT_APP_BACKEND_URL || '';
 
 export default function ClaimPage() {
   const [status, setStatus] = useState('claiming');

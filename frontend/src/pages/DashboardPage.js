@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import CookieResultCard from '@/components/CookieResultCard';
 import axios from 'axios';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const API = `${process.env.REACT_APP_BACKEND_URL || ''}/api`;
 const STUCK_WARNING_MS = 90 * 1000;
 const POLL_ERROR_THRESHOLD = 3;
 

@@ -1,0 +1,1 @@
+- [CRA and Motion production build](cra-motion-build.md) — Replit dev works, but CRA 5 production bundling misreads Motion’s `warnOnce` export; treat publishing as separate toolchain work.

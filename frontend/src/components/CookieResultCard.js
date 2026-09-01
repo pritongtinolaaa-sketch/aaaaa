@@ -6,7 +6,7 @@ import { Mail, CreditCard, Calendar, Globe, Clock, Users, ChevronDown, Copy, Che
 import { toast } from 'sonner';
 import axios from 'axios';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const API = `${process.env.REACT_APP_BACKEND_URL || ''}/api`;
 
 const statusConfig = {
   valid: {

@@ -67,6 +67,8 @@ module.exports = {
     ? { plugins: [babelMetadataPlugin] }
     : undefined,
   devServer: (devServerConfig) => {
+    devServerConfig.allowedHosts = 'all';
+
     if (enableVisualEdits && setupDevServer) {
       devServerConfig = setupDevServer(devServerConfig);
     }

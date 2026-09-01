@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // Ensure REACT_APP_BACKEND_URL points to your DigitalOcean backend, e.g.:
 // REACT_APP_BACKEND_URL=https://schirochecker-gqszi.ondigitalocean.app
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const API = `${process.env.REACT_APP_BACKEND_URL || ''}/api`;
 
 const AuthContext = createContext(null);
 
