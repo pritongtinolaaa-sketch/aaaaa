@@ -1,1 +1,2 @@
 - [CRA and Motion production build](cra-motion-build.md) — Replit dev works, but CRA 5 production bundling misreads Motion’s `warnOnce` export; treat publishing as separate toolchain work.
+- [Playwright runtime on Replit](playwright-runtime.md) — Python Playwright needs its matching Chromium download plus explicit Nix browser libraries; the driver package alone is insufficient.
