@@ -1672,6 +1672,16 @@ async def get_free_cookies(
     # premium/master can access the full filtered dataset
     if is_elevated:
         query = dict(base_query)
+        available_plans = sorted({
+            value.strip()
+            for value in await db.free_cookies.distinct("plan", base_query)
+            if isinstance(value, str) and value.strip()
+        })
+        available_countries = sorted({
+            value.strip()
+            for value in await db.free_cookies.distinct("country", base_query)
+            if isinstance(value, str) and value.strip()
+        })
 
         if status == "alive":
             query["is_alive"] = {"$ne": False}
@@ -1700,6 +1710,8 @@ async def get_free_cookies(
                 "page": page,
                 "page_size": page_size,
                 "total_pages": max(1, -(-total // page_size)),
+                "available_plans": ["all", *available_plans],
+                "available_countries": ["all", *available_countries],
             }
 
         cookies = (
@@ -1716,6 +1728,8 @@ async def get_free_cookies(
             "page": page,
             "page_size": page_size,
             "total_pages": max(1, -(-total // page_size)),
+            "available_plans": ["all", *available_plans],
+            "available_countries": ["all", *available_countries],
         }
 
     # free-tier users: only filter inside the first visible pool
