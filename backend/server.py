@@ -1576,6 +1576,15 @@ async def get_all_free_cookies_admin(
         "total_pages": -(-total // page_size)
     }
 
+@api_router.delete("/admin/free-cookies/dead")
+async def delete_dead_free_cookies(user: dict = Depends(require_admin)):
+    result = await db.free_cookies.delete_many({"is_alive": False})
+    deleted_count = result.deleted_count
+    return {
+        "message": f"Deleted {deleted_count} dead free cookies",
+        "deleted": deleted_count,
+    }
+
 @api_router.delete("/admin/free-cookies/{cookie_id}")
 async def delete_free_cookie(cookie_id: str, user: dict = Depends(require_admin)):
     result = await db.free_cookies.delete_one({"id": cookie_id})
