@@ -1,2 +1,3 @@
 - [CRA and Motion production build](cra-motion-build.md) — Replit dev works, but CRA 5 production bundling misreads Motion’s `warnOnce` export; treat publishing as separate toolchain work.
 - [Playwright runtime on Replit](playwright-runtime.md) — Python Playwright needs its matching Chromium download plus explicit Nix browser libraries; the driver package alone is insufficient.
+- [Browser-restored paste values](browser-restored-paste-values.md) — Preview browsers can restore stale textarea content; disable autocomplete and use a unique field name for cookie inputs.
