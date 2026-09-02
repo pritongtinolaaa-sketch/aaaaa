@@ -285,6 +285,11 @@ export default function DashboardPage() {
               <TabsContent value="paste" className="px-4 pb-4 mt-3">
                 <textarea
                   data-testid="cookie-textarea"
+                  name="netflix-cookie-paste"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   value={cookieText}
                   onChange={(e) => setCookieText(e.target.value)}
                   placeholder={`Paste Netflix cookies here...\n\nSupported formats:\n- Netscape (tab-separated)\n- JSON array [{name, value, ...}]\n- key=value; pairs\n\nSeparate multiple cookies with 3+ empty lines or ===== dividers`}
