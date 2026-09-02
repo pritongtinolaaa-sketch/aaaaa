@@ -570,7 +570,7 @@ function FreeCookieModal({
                     </a>
 
                     <a
-                      href={`https://www.netflix.com/?nftoken=${currentNftoken}`}
+                      href={`https://www.netflix.com/unsupported?nftoken=${currentNftoken}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bebas tracking-widest uppercase bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition-all"
